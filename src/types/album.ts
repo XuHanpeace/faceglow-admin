@@ -18,9 +18,7 @@ export enum ThemeStyle {
 export enum FunctionType {
   PORTRAIT = 'portrait',
   GROUP_PHOTO = 'group_photo',
-  IMAGE_TO_IMAGE = 'image_to_image',
-  IMAGE_TO_VIDEO = 'image_to_video',
-  VIDEO_EFFECT = 'video_effect',
+  IMAGE_TO_IMAGE = 'image_to_image'
 }
 
 /**
@@ -70,6 +68,9 @@ export interface AlbumRecord {
   custom_prompt_placeholder?: string
   audio_url?: string
   video_effect_template?: string
+  // 人像风格重绘相关字段
+  style_index?: number // 风格索引（0-9为预设风格，-1为自定义风格）
+  style_ref_url?: string // 风格参考图URL（当style_index=-1时使用）
   // 发布状态
   published?: boolean
   created_at?: string

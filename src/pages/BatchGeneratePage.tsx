@@ -32,13 +32,20 @@ interface FormData {
   function_type: string
   album_name: string
   album_description: string
-  prompt_text: string
+  prompt_text?: string
   level: string
   price: number
   sort_weight: number
   theme_styles: string[]
   activity_tags: string[]
   task_execution_type: string
+  // 人像风格重绘相关
+  style_index?: number
+  style_ref_url?: string
+  // 视频特效相关
+  video_effect_template?: string
+  // 图生视频相关
+  audio_url?: string
 }
 
 export default function BatchGeneratePage() {
@@ -72,6 +79,9 @@ export default function BatchGeneratePage() {
     result_image?: string
     src_image?: string
   }>({})
+  
+  // 监听任务执行类型变化
+  const [taskExecutionType, setTaskExecutionType] = useState<string>('sync_portrait')
 
   // 获取Category配置
   const fetchCategories = async () => {
@@ -86,6 +96,9 @@ export default function BatchGeneratePage() {
 
   useEffect(() => {
     fetchCategories()
+    // 初始化时设置 taskExecutionType
+    const initialType = form.getFieldValue('task_execution_type') || 'sync_portrait'
+    setTaskExecutionType(initialType)
   }, [])
 
   // 实时更新JSON预览
@@ -95,7 +108,11 @@ export default function BatchGeneratePage() {
   }
 
   // 监听表单字段变化
-  const handleFormChange = () => {
+  const handleFormChange = (changedValues: any, allValues: any) => {
+    // 监听任务执行类型变化
+    if (changedValues.task_execution_type !== undefined) {
+      setTaskExecutionType(changedValues.task_execution_type)
+    }
     updatePreview()
   }
 
@@ -168,9 +185,16 @@ export default function BatchGeneratePage() {
         level: formValues.level || AlbumLevel.FREE,
         price: formValues.price || 0,
         sort_weight: formValues.sort_weight || 0,
-        task_execution_type: formValues.task_execution_type || 'sync',
+        task_execution_type: formValues.task_execution_type || 'sync_portrait',
         likes: 0,
         published: false,
+        // 人像风格重绘相关字段
+        style_index: formValues.style_index,
+        style_ref_url: formValues.style_ref_url,
+        // 视频特效相关字段
+        video_effect_template: formValues.video_effect_template,
+        // 图生视频相关字段
+        audio_url: formValues.audio_url,
         // 图片URL：如果已上传则显示真实URL，否则显示待上传
         album_image: uploadedUrls.album_image || (coverImageFile ? '[待上传]' : ''),
         result_image: uploadedUrls.result_image || (coverImageFile ? '[待上传]' : ''),
@@ -206,8 +230,27 @@ export default function BatchGeneratePage() {
         return
       }
 
-      if (!formValues.prompt_text?.trim()) {
+      // 视频特效不需要 prompt_text
+      if (taskExecutionType !== 'async_video_effect' && !formValues.prompt_text?.trim()) {
         message.warning('请填入Prompt文本')
+        return
+      }
+
+      // 人像风格重绘需要 style_index
+      if (taskExecutionType === 'async_portrait_style_redraw') {
+        if (formValues.style_index === undefined || formValues.style_index === null) {
+          message.warning('请选择风格索引')
+          return
+        }
+        if (formValues.style_index === -1 && !formValues.style_ref_url?.trim()) {
+          message.warning('使用自定义风格时，需要提供风格参考图URL')
+          return
+        }
+      }
+
+      // 视频特效需要 template
+      if (taskExecutionType === 'async_video_effect' && !formValues.video_effect_template?.trim()) {
+        message.warning('请选择特效模板')
         return
       }
 
@@ -269,14 +312,21 @@ export default function BatchGeneratePage() {
         theme_styles: formValues.theme_styles || [],
         function_type: formValues.function_type,
         activity_tags: formValues.activity_tags || [],
-        task_execution_type: formValues.task_execution_type || 'sync',
+        task_execution_type: formValues.task_execution_type || 'sync_portrait',
         level: formValues.level || AlbumLevel.FREE,
         price: formValues.price || 0,
-        prompt_text: formValues.prompt_text,
-        style_description: formValues.prompt_text,
+        prompt_text: formValues.prompt_text || '',
+        style_description: formValues.prompt_text || '',
         likes: 0,
         sort_weight: formValues.sort_weight || 0,
         published: false, // 未发布状态
+        // 人像风格重绘相关字段
+        style_index: formValues.style_index,
+        style_ref_url: formValues.style_ref_url,
+        // 视频特效相关字段
+        video_effect_template: formValues.video_effect_template,
+        // 图生视频相关字段
+        audio_url: formValues.audio_url,
       }
 
       await albumService.createAlbum(albumData)
@@ -333,127 +383,274 @@ export default function BatchGeneratePage() {
                     sort_weight: 0,
                     theme_styles: [],
                     activity_tags: [],
-                    task_execution_type: 'sync',
+                    task_execution_type: 'sync_portrait',
                   }}
                 >
-                  {/* 1. 选择功能类型 */}
-                  <Form.Item 
-                    name="function_type" 
-                    label="功能类型" 
-                    rules={[{ required: true, message: '请选择功能类型' }]}
-                  >
-                    <Select placeholder="选择功能类型" style={{ width: '100%' }}>
-                      {categoryOptions.map((option) => (
-                        <Option key={option.value} value={option.value}>
-                          {option.label}
-                        </Option>
-                      ))}
-                    </Select>
-                  </Form.Item>
-
-                  {/* 任务执行类型 */}
-                  <Form.Item 
-                    name="task_execution_type" 
-                    label="任务执行类型" 
-                    rules={[{ required: true, message: '请选择任务执行类型' }]}
-                    tooltip="sync: 同步执行（立即返回结果，调用fusion接口）; async: 异步执行（需要轮询获取结果，调用callBailian接口）"
-                  >
-                    <Select placeholder="选择任务执行类型" style={{ width: '100%' }}>
-                      <Option value="sync">同步执行（sync）</Option>
-                      <Option value="async">异步执行（async）</Option>
-                    </Select>
-                  </Form.Item>
+                  {/* 功能类型和任务执行类型 - 紧凑布局 */}
+                  <Row gutter={16}>
+                    <Col span={12}>
+                      <Form.Item 
+                        name="function_type" 
+                        label="功能类型" 
+                        rules={[{ required: true, message: '请选择功能类型' }]}
+                      >
+                        <Select placeholder="选择功能类型">
+                          {categoryOptions.map((option) => (
+                            <Option key={option.value} value={option.value}>
+                              {option.label}
+                            </Option>
+                          ))}
+                        </Select>
+                      </Form.Item>
+                    </Col>
+                    <Col span={12}>
+                      <Form.Item 
+                        name="task_execution_type" 
+                        label="任务执行类型" 
+                        rules={[{ required: true, message: '请选择任务执行类型' }]}
+                        tooltip="选择任务执行类型，决定调用哪个云函数以及需要填写哪些参数"
+                      >
+                        <Select 
+                          placeholder="选择任务执行类型"
+                          onChange={(value) => setTaskExecutionType(value)}
+                        >
+                          <Option value="sync_portrait">同步执行 - 个人写真换脸（调用 fusion）</Option>
+                          <Option value="sync_group_photo">同步执行 - 多人合拍换脸（调用 fusion）</Option>
+                          <Option value="async_image_to_image">异步执行 - 图生图（调用 callBailian）</Option>
+                          <Option value="async_image_to_video">异步执行 - 图生视频（调用 callBailian）</Option>
+                          <Option value="async_video_effect">异步执行 - 视频特效（调用 callBailian）</Option>
+                          <Option value="async_portrait_style_redraw">异步执行 - 人像风格重绘（调用 callBailian）</Option>
+                        </Select>
+                      </Form.Item>
+                    </Col>
+                  </Row>
 
                   <Divider />
 
-                  {/* 相册名称 */}
-                  <Form.Item 
-                    name="album_name" 
-                    label="相册名称" 
-                    rules={[{ required: true, message: '请填入相册名称' }]}
-                  >
-                    <Input placeholder="输入相册名称" />
-                  </Form.Item>
+                  {/* 相册名称和描述 - 紧凑布局 */}
+                  <Row gutter={16}>
+                    <Col span={12}>
+                      <Form.Item 
+                        name="album_name" 
+                        label="相册名称" 
+                        rules={[{ required: true, message: '请填入相册名称' }]}
+                      >
+                        <Input placeholder="输入相册名称" />
+                      </Form.Item>
+                    </Col>
+                    <Col span={12}>
+                      <Form.Item name="level" label="相册等级">
+                        <Select>
+                          <Option value={AlbumLevel.FREE}>免费</Option>
+                          <Option value={AlbumLevel.PREMIUM}>高级</Option>
+                          <Option value={AlbumLevel.VIP}>VIP</Option>
+                        </Select>
+                      </Form.Item>
+                    </Col>
+                  </Row>
 
-                  {/* 相册描述 */}
                   <Form.Item 
                     name="album_description" 
                     label="相册描述" 
                     rules={[{ required: true, message: '请填入相册描述' }]}
                   >
                     <TextArea 
-                      rows={3} 
+                      rows={2} 
                       placeholder="输入相册描述"
-                      style={{ maxWidth: '800px', width: '100%' }}
                     />
                   </Form.Item>
 
                   <Divider />
 
-                  {/* 2. 本地上传封面图 */}
-                  <Form.Item label="封面图（album_image / result_image）" required>
-                    <Upload
-                      listType="picture-card"
-                      maxCount={1}
-                      beforeUpload={() => false} // 阻止自动上传
-                      onChange={handleCoverImageChange}
-                      accept="image/*"
-                    >
-                      {coverImagePreview ? (
-                        <Image
-                          src={coverImagePreview}
-                          alt="封面图预览"
-                          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                          preview={false}
-                        />
-                      ) : (
-                        <div>
-                          <UploadOutlined />
-                          <div style={{ marginTop: 8 }}>上传封面图</div>
-                        </div>
-                      )}
-                    </Upload>
-                  </Form.Item>
-
-                  {/* 3. 本地上传原始图 */}
-                  <Form.Item label="原始图（src_image）" required>
-                    <Upload
-                      listType="picture-card"
-                      maxCount={1}
-                      beforeUpload={() => false} // 阻止自动上传
-                      onChange={handleSrcImageChange}
-                      accept="image/*"
-                    >
-                      {srcImagePreview ? (
-                        <Image
-                          src={srcImagePreview}
-                          alt="原始图预览"
-                          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                          preview={false}
-                        />
-                      ) : (
-                        <div>
-                          <UploadOutlined />
-                          <div style={{ marginTop: 8 }}>上传原始图</div>
-                        </div>
-                      )}
-                    </Upload>
-                  </Form.Item>
+                  {/* 图片上传 - 紧凑布局 */}
+                  <Row gutter={16}>
+                    <Col span={12}>
+                      <Form.Item label="封面图（album_image）" required>
+                        <Upload
+                          listType="picture-card"
+                          maxCount={1}
+                          beforeUpload={() => false}
+                          onChange={handleCoverImageChange}
+                          accept="image/*"
+                        >
+                          {coverImagePreview ? (
+                            <Image
+                              src={coverImagePreview}
+                              alt="封面图预览"
+                              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                              preview={false}
+                            />
+                          ) : (
+                            <div>
+                              <UploadOutlined />
+                              <div style={{ marginTop: 8 }}>上传封面图</div>
+                            </div>
+                          )}
+                        </Upload>
+                      </Form.Item>
+                    </Col>
+                    <Col span={12}>
+                      <Form.Item label="原始图（src_image）" required>
+                        <Upload
+                          listType="picture-card"
+                          maxCount={1}
+                          beforeUpload={() => false}
+                          onChange={handleSrcImageChange}
+                          accept="image/*"
+                        >
+                          {srcImagePreview ? (
+                            <Image
+                              src={srcImagePreview}
+                              alt="原始图预览"
+                              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                              preview={false}
+                            />
+                          ) : (
+                            <div>
+                              <UploadOutlined />
+                              <div style={{ marginTop: 8 }}>上传原始图</div>
+                            </div>
+                          )}
+                        </Upload>
+                      </Form.Item>
+                    </Col>
+                  </Row>
 
                   <Divider />
 
-                  {/* 4. 填入 promptText */}
-                  <Form.Item 
-                    name="prompt_text" 
-                    label="Prompt文本" 
-                    rules={[{ required: true, message: '请填入Prompt文本' }]}
-                  >
-                    <TextArea 
-                      rows={4} 
-                      placeholder="输入Prompt文本"
-                      style={{ maxWidth: '800px', width: '100%' }}
-                    />
-                  </Form.Item>
+                  {/* 根据任务执行类型显示不同的配置字段 */}
+                  
+                  {/* 人像风格重绘配置 */}
+                  {taskExecutionType === 'async_portrait_style_redraw' && (
+                    <>
+                      <Row gutter={16}>
+                        <Col span={12}>
+                          <Form.Item 
+                            name="style_index" 
+                            label="风格索引（style_index）" 
+                            rules={[{ required: true, message: '请选择风格索引' }]}
+                            tooltip="0-9为预设风格，-1为自定义风格"
+                          >
+                            <Select placeholder="选择风格索引">
+                              <Option value={0}>0 - 复古漫画</Option>
+                              <Option value={1}>1 - 3D童话</Option>
+                              <Option value={2}>2 - 二次元</Option>
+                              <Option value={3}>3 - 小清新</Option>
+                              <Option value={4}>4 - 未来科技</Option>
+                              <Option value={5}>5 - 国画古风</Option>
+                              <Option value={6}>6 - 将军百战</Option>
+                              <Option value={7}>7 - 炫彩卡通</Option>
+                              <Option value={8}>8 - 清雅国风</Option>
+                              <Option value={9}>9 - 喜迎新年</Option>
+                              <Option value={-1}>-1 - 自定义风格</Option>
+                            </Select>
+                          </Form.Item>
+                        </Col>
+                        <Col span={12}>
+                          <Form.Item 
+                            noStyle
+                            shouldUpdate={(prevValues: Record<string, any>, currentValues: Record<string, any>) => 
+                              prevValues?.style_index !== currentValues?.style_index
+                            }
+                          >
+                            {({ getFieldValue }) => {
+                              const styleIndex = getFieldValue('style_index')
+                              if (styleIndex === -1) {
+                                return (
+                                  <Form.Item 
+                                    name="style_ref_url" 
+                                    label="风格参考图URL（style_ref_url）" 
+                                    rules={[
+                                      { required: true, message: '自定义风格需要提供参考图URL' }
+                                    ]}
+                                  >
+                                    <Input placeholder="输入风格参考图URL" />
+                                  </Form.Item>
+                                )
+                              }
+                              return null
+                            }}
+                          </Form.Item>
+                        </Col>
+                      </Row>
+                      <Divider />
+                    </>
+                  )}
+
+                  {/* 视频特效配置 */}
+                  {taskExecutionType === 'async_video_effect' && (
+                    <>
+                      <Form.Item 
+                        name="video_effect_template" 
+                        label="特效模板（template）" 
+                        rules={[{ required: true, message: '请选择特效模板' }]}
+                        tooltip="视频特效使用首帧图片生成特效视频，无需提示词"
+                      >
+                        <Select placeholder="选择特效模板">
+                          <Option value="flying">魔法悬浮 (flying)</Option>
+                          <Option value="squish">解压捏捏 (squish)</Option>
+                          <Option value="rotation">转圈圈 (rotation)</Option>
+                          <Option value="poke">戳戳乐 (poke)</Option>
+                          <Option value="inflate">气球膨胀 (inflate)</Option>
+                          <Option value="dissolve">分子扩散 (dissolve)</Option>
+                          <Option value="melt">热浪融化 (melt)</Option>
+                          <Option value="icecream">冰淇淋星球 (icecream)</Option>
+                          <Option value="carousel">时光木马 (carousel)</Option>
+                          <Option value="singleheart">爱你哟 (singleheart)</Option>
+                          <Option value="dance1">摇摆时刻 (dance1)</Option>
+                          <Option value="dance2">头号甩舞 (dance2)</Option>
+                          <Option value="dance3">星摇时刻 (dance3)</Option>
+                          <Option value="dance4">指感节奏 (dance4)</Option>
+                          <Option value="dance5">舞动开关 (dance5)</Option>
+                          <Option value="mermaid">人鱼觉醒 (mermaid)</Option>
+                          <Option value="graduation">学术加冕 (graduation)</Option>
+                          <Option value="dragon">巨兽追袭 (dragon)</Option>
+                          <Option value="money">财从天降 (money)</Option>
+                          <Option value="jellyfish">水母之约 (jellyfish)</Option>
+                          <Option value="pupil">瞳孔穿越 (pupil)</Option>
+                          <Option value="rose">赠人玫瑰 (rose)</Option>
+                          <Option value="crystalrose">闪亮玫瑰 (crystalrose)</Option>
+                          <Option value="hug">爱的抱抱 (hug)</Option>
+                          <Option value="frenchkiss">唇齿相依 (frenchkiss)</Option>
+                          <Option value="coupleheart">双倍心动 (coupleheart)</Option>
+                          <Option value="hanfu-1">唐韵翩然 (hanfu-1)</Option>
+                          <Option value="solaron">机甲变身 (solaron)</Option>
+                          <Option value="magazine">闪耀封面 (magazine)</Option>
+                          <Option value="mech1">机械觉醒 (mech1)</Option>
+                          <Option value="mech2">赛博登场 (mech2)</Option>
+                        </Select>
+                      </Form.Item>
+                      <Divider />
+                    </>
+                  )}
+
+                  {/* 图生视频配置 */}
+                  {taskExecutionType === 'async_image_to_video' && (
+                    <>
+                      <Form.Item 
+                        name="audio_url" 
+                        label="音频URL（audio_url，可选）"
+                        tooltip="图生视频音频URL，仅wan2.5-i2v-preview支持"
+                      >
+                        <Input placeholder="输入音频URL（可选）" />
+                      </Form.Item>
+                      <Divider />
+                    </>
+                  )}
+
+                  {/* Prompt文本 - 视频特效不需要 */}
+                  {taskExecutionType !== 'async_video_effect' && (
+                    <Form.Item 
+                      name="prompt_text" 
+                      label="Prompt文本" 
+                      rules={[{ required: true, message: '请填入Prompt文本' }]}
+                    >
+                      <TextArea 
+                        rows={3} 
+                        placeholder="输入Prompt文本"
+                      />
+                    </Form.Item>
+                  )}
 
                   <Divider />
 
@@ -491,23 +688,14 @@ export default function BatchGeneratePage() {
                     </Col>
                   </Row>
 
-                  {/* 其他配置 */}
+                  {/* 价格和排序权重 - 紧凑布局 */}
                   <Row gutter={16}>
-                    <Col span={8}>
-                      <Form.Item name="level" label="相册等级">
-                        <Select>
-                          <Option value={AlbumLevel.FREE}>免费</Option>
-                          <Option value={AlbumLevel.PREMIUM}>高级</Option>
-                          <Option value={AlbumLevel.VIP}>VIP</Option>
-                        </Select>
-                      </Form.Item>
-                    </Col>
-                    <Col span={8}>
+                    <Col span={12}>
                       <Form.Item name="price" label="价格（美美币）">
                         <InputNumber min={0} style={{ width: '100%' }} />
                       </Form.Item>
                     </Col>
-                    <Col span={8}>
+                    <Col span={12}>
                       <Form.Item name="sort_weight" label="排序权重">
                         <InputNumber min={0} style={{ width: '100%' }} />
                       </Form.Item>

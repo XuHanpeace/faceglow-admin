@@ -228,14 +228,19 @@ export default function AlbumListPage() {
       // 构建更新数据
       const updates: Partial<AlbumRecord> = {
         function_type: editingAlbum.function_type,
+        task_execution_type: editingAlbum.task_execution_type,
         theme_styles: editingAlbum.theme_styles,
         activity_tags: editingAlbum.activity_tags,
         sort_weight: editingAlbum.sort_weight,
       }
 
-      // 如果是图生图类型或个人写真类型，更新相关字段
-      if (editingAlbum.function_type === FunctionType.IMAGE_TO_IMAGE || 
-          editingAlbum.function_type === FunctionType.PORTRAIT) {
+      // 根据 task_execution_type 更新相关字段
+      const taskType = editingAlbum.task_execution_type
+
+      // 同步任务（sync_portrait, sync_group_photo）- 不需要特殊字段，使用 template_list
+      
+      // 异步任务 - 图生图
+      if (taskType === 'async_image_to_image') {
         if (editingAlbum.src_image) {
           updates.src_image = editingAlbum.src_image
         }
@@ -247,6 +252,54 @@ export default function AlbumListPage() {
         }
         if (editingAlbum.style_description !== undefined) {
           updates.style_description = editingAlbum.style_description
+        }
+      }
+
+      // 异步任务 - 图生视频
+      if (taskType === 'async_image_to_video') {
+        if (editingAlbum.src_image) {
+          updates.src_image = editingAlbum.src_image
+        }
+        if (editingAlbum.preview_video_url) {
+          updates.preview_video_url = editingAlbum.preview_video_url
+        }
+        if (editingAlbum.prompt_text !== undefined) {
+          updates.prompt_text = editingAlbum.prompt_text
+        }
+        if (editingAlbum.audio_url !== undefined) {
+          updates.audio_url = editingAlbum.audio_url
+        }
+      }
+
+      // 异步任务 - 视频特效
+      if (taskType === 'async_video_effect') {
+        if (editingAlbum.video_effect_template !== undefined) {
+          updates.video_effect_template = editingAlbum.video_effect_template
+        }
+        if (editingAlbum.src_image) {
+          updates.src_image = editingAlbum.src_image
+        }
+        if (editingAlbum.preview_video_url) {
+          updates.preview_video_url = editingAlbum.preview_video_url
+        }
+      }
+
+      // 异步任务 - 人像风格重绘
+      if (taskType === 'async_portrait_style_redraw') {
+        if (editingAlbum.style_index !== undefined) {
+          updates.style_index = editingAlbum.style_index
+        }
+        if (editingAlbum.style_ref_url !== undefined) {
+          updates.style_ref_url = editingAlbum.style_ref_url
+        }
+        if (editingAlbum.src_image) {
+          updates.src_image = editingAlbum.src_image
+        }
+        if (editingAlbum.result_image) {
+          updates.result_image = editingAlbum.result_image
+        }
+        if (editingAlbum.prompt_text !== undefined) {
+          updates.prompt_text = editingAlbum.prompt_text
         }
       }
 
@@ -275,10 +328,29 @@ export default function AlbumListPage() {
 
   // 获取任务执行类型显示文本
   const getTaskExecutionTypeLabel = (type: string): string => {
-    if (type === 'sync') return '同步执行（sync）'
-    if (type === 'async') return '异步执行（async）'
-    return type || '未知'
+    const typeMap: Record<string, string> = {
+      'sync_portrait': '同步执行 - 个人写真换脸',
+      'sync_group_photo': '同步执行 - 多人合拍换脸',
+      'async_image_to_image': '异步执行 - 图生图',
+      'async_image_to_video': '异步执行 - 图生视频',
+      'async_video_effect': '异步执行 - 视频特效',
+      'async_portrait_style_redraw': '异步执行 - 人像风格重绘',
+      // 向后兼容
+      'sync': '同步执行（sync）',
+      'async': '异步执行（async）',
+    }
+    return typeMap[type] || type || '未知'
   }
+
+  // 任务执行类型选项
+  const taskExecutionTypeOptions = [
+    { value: 'sync_portrait', label: '同步执行 - 个人写真换脸（调用 fusion）' },
+    { value: 'sync_group_photo', label: '同步执行 - 多人合拍换脸（调用 fusion）' },
+    { value: 'async_image_to_image', label: '异步执行 - 图生图（调用 callBailian）' },
+    { value: 'async_image_to_video', label: '异步执行 - 图生视频（调用 callBailian）' },
+    { value: 'async_video_effect', label: '异步执行 - 视频特效（调用 callBailian）' },
+    { value: 'async_portrait_style_redraw', label: '异步执行 - 人像风格重绘（调用 callBailian）' },
+  ]
 
   // 获取功能类型选项
   const functionTypeOptions = categories
@@ -552,12 +624,26 @@ export default function AlbumListPage() {
             </div>
 
             <div style={{ marginBottom: 16 }}>
-              <label style={{ display: 'block', marginBottom: 8 }}>任务执行类型：</label>
-              <Input 
-                value={getTaskExecutionTypeLabel(editingAlbum.task_execution_type)} 
-                disabled 
-                style={{ backgroundColor: '#f5f5f5' }}
-              />
+              <label style={{ display: 'block', marginBottom: 8 }}>
+                任务执行类型：
+                <Tooltip title="选择任务执行类型，决定调用哪个云函数以及需要填写哪些参数">
+                  <span style={{ marginLeft: 4, color: '#1890ff', cursor: 'help' }}>❓</span>
+                </Tooltip>
+              </label>
+              <Select
+                value={editingAlbum.task_execution_type}
+                onChange={(value) => {
+                  setEditingAlbum({ ...editingAlbum, task_execution_type: value })
+                }}
+                style={{ width: '100%' }}
+                placeholder="选择任务执行类型"
+              >
+                {taskExecutionTypeOptions.map((option) => (
+                  <Option key={option.value} value={option.value}>
+                    {option.label}
+                  </Option>
+                ))}
+              </Select>
             </div>
 
             <Divider />
@@ -600,9 +686,352 @@ export default function AlbumListPage() {
               </Select>
             </div>
 
-            {/* 图生图类型或个人写真类型的特殊字段 */}
-            {(editingAlbum.function_type === FunctionType.IMAGE_TO_IMAGE || 
-              editingAlbum.function_type === FunctionType.PORTRAIT) && (
+            {/* 根据 task_execution_type 显示不同的配置区域 */}
+            
+            {/* 异步任务 - 视频特效配置 */}
+            {editingAlbum.task_execution_type === 'async_video_effect' && (
+              <>
+                <Divider>视频特效配置</Divider>
+
+                <div style={{ marginBottom: 16 }}>
+                  <label style={{ display: 'block', marginBottom: 8 }}>特效模板（template）：</label>
+                  <Select
+                    value={editingAlbum.video_effect_template || ''}
+                    onChange={(value) => {
+                      setEditingAlbum({ ...editingAlbum, video_effect_template: value })
+                    }}
+                    style={{ width: '100%' }}
+                    placeholder="选择特效模板"
+                    allowClear
+                  >
+                    <Option value="flying">魔法悬浮 (flying)</Option>
+                    <Option value="squish">解压捏捏 (squish)</Option>
+                    <Option value="rotation">转圈圈 (rotation)</Option>
+                    <Option value="poke">戳戳乐 (poke)</Option>
+                    <Option value="inflate">气球膨胀 (inflate)</Option>
+                    <Option value="dissolve">分子扩散 (dissolve)</Option>
+                    <Option value="melt">热浪融化 (melt)</Option>
+                    <Option value="icecream">冰淇淋星球 (icecream)</Option>
+                    <Option value="carousel">时光木马 (carousel)</Option>
+                    <Option value="singleheart">爱你哟 (singleheart)</Option>
+                    <Option value="dance1">摇摆时刻 (dance1)</Option>
+                    <Option value="dance2">头号甩舞 (dance2)</Option>
+                    <Option value="dance3">星摇时刻 (dance3)</Option>
+                    <Option value="dance4">指感节奏 (dance4)</Option>
+                    <Option value="dance5">舞动开关 (dance5)</Option>
+                    <Option value="mermaid">人鱼觉醒 (mermaid)</Option>
+                    <Option value="graduation">学术加冕 (graduation)</Option>
+                    <Option value="dragon">巨兽追袭 (dragon)</Option>
+                    <Option value="money">财从天降 (money)</Option>
+                    <Option value="jellyfish">水母之约 (jellyfish)</Option>
+                    <Option value="pupil">瞳孔穿越 (pupil)</Option>
+                    <Option value="rose">赠人玫瑰 (rose)</Option>
+                    <Option value="crystalrose">闪亮玫瑰 (crystalrose)</Option>
+                    <Option value="hug">爱的抱抱 (hug)</Option>
+                    <Option value="frenchkiss">唇齿相依 (frenchkiss)</Option>
+                    <Option value="coupleheart">双倍心动 (coupleheart)</Option>
+                    <Option value="hanfu-1">唐韵翩然 (hanfu-1)</Option>
+                    <Option value="solaron">机甲变身 (solaron)</Option>
+                    <Option value="magazine">闪耀封面 (magazine)</Option>
+                    <Option value="mech1">机械觉醒 (mech1)</Option>
+                    <Option value="mech2">赛博登场 (mech2)</Option>
+                  </Select>
+                  <div style={{ marginTop: 8, fontSize: 12, color: '#666' }}>
+                    提示：视频特效使用首帧图片生成特效视频，无需提示词
+                  </div>
+                </div>
+
+                <div style={{ marginBottom: 16 }}>
+                  <label style={{ display: 'block', marginBottom: 8 }}>首帧图片（src_image）：</label>
+                  <Row gutter={16}>
+                    <Col span={12}>
+                      <Upload
+                        listType="picture-card"
+                        maxCount={1}
+                        beforeUpload={() => false}
+                        onChange={handleSrcImageChange}
+                        accept="image/*"
+                        showUploadList={false}
+                      >
+                        {(srcImagePreview || editingAlbum.src_image) ? (
+                          <Image
+                            src={srcImagePreview || editingAlbum.src_image}
+                            alt="首帧图片"
+                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                            preview={false}
+                          />
+                        ) : (
+                          <div>
+                            <UploadOutlined />
+                            <div style={{ marginTop: 8 }}>上传首帧图片</div>
+                          </div>
+                        )}
+                      </Upload>
+                    </Col>
+                    <Col span={12}>
+                      <div>
+                        <div style={{ marginBottom: 8, fontSize: 12, color: '#666' }}>图片URL：</div>
+                        <Input
+                          value={editingAlbum.src_image || ''}
+                          onChange={(e) => {
+                            setEditingAlbum({ ...editingAlbum, src_image: e.target.value })
+                          }}
+                          placeholder="输入或上传首帧图片URL"
+                          style={{ fontSize: 12 }}
+                          allowClear
+                        />
+                      </div>
+                    </Col>
+                  </Row>
+                </div>
+
+                <div style={{ marginBottom: 16 }}>
+                  <label style={{ display: 'block', marginBottom: 8 }}>预览视频URL（preview_video_url）：</label>
+                  <Input
+                    value={editingAlbum.preview_video_url || ''}
+                    onChange={(e) => {
+                      setEditingAlbum({ ...editingAlbum, preview_video_url: e.target.value })
+                    }}
+                    placeholder="输入预览视频URL（可选）"
+                    allowClear
+                  />
+                </div>
+              </>
+            )}
+
+            {/* 异步任务 - 人像风格重绘配置 */}
+            {editingAlbum.task_execution_type === 'async_portrait_style_redraw' && (
+              <>
+                <Divider>人像风格重绘配置</Divider>
+
+                <div style={{ marginBottom: 16 }}>
+                  <label style={{ display: 'block', marginBottom: 8 }}>风格索引（style_index）：</label>
+                  <Select
+                    value={editingAlbum.style_index !== undefined ? editingAlbum.style_index : 0}
+                    onChange={(value) => {
+                      setEditingAlbum({ 
+                        ...editingAlbum, 
+                        style_index: value,
+                        // 如果不是自定义风格，清空 style_ref_url
+                        style_ref_url: value !== -1 ? undefined : editingAlbum.style_ref_url
+                      })
+                    }}
+                    style={{ width: '100%' }}
+                    placeholder="选择风格索引"
+                  >
+                    <Option value={0}>0 - 复古漫画</Option>
+                    <Option value={1}>1 - 3D童话</Option>
+                    <Option value={2}>2 - 二次元</Option>
+                    <Option value={3}>3 - 小清新</Option>
+                    <Option value={4}>4 - 未来科技</Option>
+                    <Option value={5}>5 - 国画古风</Option>
+                    <Option value={6}>6 - 将军百战</Option>
+                    <Option value={7}>7 - 炫彩卡通</Option>
+                    <Option value={8}>8 - 清雅国风</Option>
+                    <Option value={9}>9 - 喜迎新年</Option>
+                    <Option value={-1}>-1 - 自定义风格</Option>
+                  </Select>
+                  <div style={{ marginTop: 8, fontSize: 12, color: '#666' }}>
+                    提示：选择 -1 表示使用自定义风格，需要提供风格参考图URL
+                  </div>
+                </div>
+
+                {editingAlbum.style_index === -1 && (
+                  <div style={{ marginBottom: 16 }}>
+                    <label style={{ display: 'block', marginBottom: 8 }}>风格参考图URL（style_ref_url）：</label>
+                    <Input
+                      value={editingAlbum.style_ref_url || ''}
+                      onChange={(e) => {
+                        setEditingAlbum({ ...editingAlbum, style_ref_url: e.target.value })
+                      }}
+                      placeholder="输入风格参考图URL（必填）"
+                      allowClear
+                    />
+                    <div style={{ marginTop: 8, fontSize: 12, color: '#666' }}>
+                      提示：当 style_index 为 -1 时，此字段为必填
+                    </div>
+                  </div>
+                )}
+
+                <div style={{ marginBottom: 16 }}>
+                  <label style={{ display: 'block', marginBottom: 8 }}>原始图片（src_image）：</label>
+                  <Row gutter={16}>
+                    <Col span={12}>
+                      <Upload
+                        listType="picture-card"
+                        maxCount={1}
+                        beforeUpload={() => false}
+                        onChange={handleSrcImageChange}
+                        accept="image/*"
+                        showUploadList={false}
+                      >
+                        {(srcImagePreview || editingAlbum.src_image) ? (
+                          <Image
+                            src={srcImagePreview || editingAlbum.src_image}
+                            alt="原始图片"
+                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                            preview={false}
+                          />
+                        ) : (
+                          <div>
+                            <UploadOutlined />
+                            <div style={{ marginTop: 8 }}>上传原始图片</div>
+                          </div>
+                        )}
+                      </Upload>
+                    </Col>
+                    <Col span={12}>
+                      <div>
+                        <div style={{ marginBottom: 8, fontSize: 12, color: '#666' }}>图片URL：</div>
+                        <Input
+                          value={editingAlbum.src_image || ''}
+                          onChange={(e) => {
+                            setEditingAlbum({ ...editingAlbum, src_image: e.target.value })
+                          }}
+                          placeholder="输入或上传原始图片URL"
+                          style={{ fontSize: 12 }}
+                          allowClear
+                        />
+                      </div>
+                    </Col>
+                  </Row>
+                </div>
+
+                <div style={{ marginBottom: 16 }}>
+                  <label style={{ display: 'block', marginBottom: 8 }}>结果图（result_image）：</label>
+                  <Row gutter={16}>
+                    <Col span={12}>
+                      <Upload
+                        listType="picture-card"
+                        maxCount={1}
+                        beforeUpload={() => false}
+                        onChange={handleResultImageChange}
+                        accept="image/*"
+                        showUploadList={false}
+                      >
+                        {(resultImagePreview || editingAlbum.result_image) ? (
+                          <Image
+                            src={resultImagePreview || editingAlbum.result_image}
+                            alt="结果图"
+                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                            preview={false}
+                          />
+                        ) : (
+                          <div>
+                            <UploadOutlined />
+                            <div style={{ marginTop: 8 }}>上传结果图</div>
+                          </div>
+                        )}
+                      </Upload>
+                    </Col>
+                    <Col span={12}>
+                      <div>
+                        <div style={{ marginBottom: 8, fontSize: 12, color: '#666' }}>图片URL：</div>
+                        <Input
+                          value={editingAlbum.result_image || ''}
+                          onChange={(e) => {
+                            setEditingAlbum({ ...editingAlbum, result_image: e.target.value })
+                          }}
+                          placeholder="输入或上传结果图URL"
+                          style={{ fontSize: 12 }}
+                          allowClear
+                        />
+                      </div>
+                    </Col>
+                  </Row>
+                </div>
+              </>
+            )}
+
+            {/* 异步任务 - 图生视频配置 */}
+            {editingAlbum.task_execution_type === 'async_image_to_video' && (
+              <>
+                <Divider>图生视频配置</Divider>
+
+                <div style={{ marginBottom: 16 }}>
+                  <label style={{ display: 'block', marginBottom: 8 }}>提示词（prompt_text）：</label>
+                  <TextArea
+                    value={editingAlbum.prompt_text || ''}
+                    onChange={(e) => {
+                      setEditingAlbum({ ...editingAlbum, prompt_text: e.target.value })
+                    }}
+                    rows={4}
+                    placeholder="输入提示词，描述要生成的视频效果"
+                  />
+                </div>
+
+                <div style={{ marginBottom: 16 }}>
+                  <label style={{ display: 'block', marginBottom: 8 }}>首帧图片（src_image）：</label>
+                  <Row gutter={16}>
+                    <Col span={12}>
+                      <Upload
+                        listType="picture-card"
+                        maxCount={1}
+                        beforeUpload={() => false}
+                        onChange={handleSrcImageChange}
+                        accept="image/*"
+                        showUploadList={false}
+                      >
+                        {(srcImagePreview || editingAlbum.src_image) ? (
+                          <Image
+                            src={srcImagePreview || editingAlbum.src_image}
+                            alt="首帧图片"
+                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                            preview={false}
+                          />
+                        ) : (
+                          <div>
+                            <UploadOutlined />
+                            <div style={{ marginTop: 8 }}>上传首帧图片</div>
+                          </div>
+                        )}
+                      </Upload>
+                    </Col>
+                    <Col span={12}>
+                      <div>
+                        <div style={{ marginBottom: 8, fontSize: 12, color: '#666' }}>图片URL：</div>
+                        <Input
+                          value={editingAlbum.src_image || ''}
+                          onChange={(e) => {
+                            setEditingAlbum({ ...editingAlbum, src_image: e.target.value })
+                          }}
+                          placeholder="输入或上传首帧图片URL"
+                          style={{ fontSize: 12 }}
+                          allowClear
+                        />
+                      </div>
+                    </Col>
+                  </Row>
+                </div>
+
+                <div style={{ marginBottom: 16 }}>
+                  <label style={{ display: 'block', marginBottom: 8 }}>音频URL（audio_url，可选）：</label>
+                  <Input
+                    value={editingAlbum.audio_url || ''}
+                    onChange={(e) => {
+                      setEditingAlbum({ ...editingAlbum, audio_url: e.target.value })
+                    }}
+                    placeholder="输入音频URL（可选，仅wan2.5-i2v-preview支持）"
+                    allowClear
+                  />
+                </div>
+
+                <div style={{ marginBottom: 16 }}>
+                  <label style={{ display: 'block', marginBottom: 8 }}>预览视频URL（preview_video_url）：</label>
+                  <Input
+                    value={editingAlbum.preview_video_url || ''}
+                    onChange={(e) => {
+                      setEditingAlbum({ ...editingAlbum, preview_video_url: e.target.value })
+                    }}
+                    placeholder="输入预览视频URL（可选）"
+                    allowClear
+                  />
+                </div>
+              </>
+            )}
+
+            {/* 异步任务 - 图生图配置 */}
+            {editingAlbum.task_execution_type === 'async_image_to_image' && (
               <>
                 <Divider>图生图配置</Divider>
 
