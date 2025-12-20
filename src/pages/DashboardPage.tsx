@@ -60,7 +60,92 @@ export default function DashboardPage() {
       const startTime = dateRange[0].startOf('day').unix()
       const endTime = dateRange[1].endOf('day').unix()
 
-      // 并行获取所有数据
+      // 使用批量调用，将 8 次 API 调用合并为 1 次
+      const batchRequests = [
+        {
+          Action: 'DescribeDataEventUrl',
+          Version: '2021-06-22',
+          ProjectID: 'rum-6LsNkbT91rNlaj',
+          StartTime: startTime,
+          EndTime: endTime,
+          Type: 'ckpv',
+          ExtFirst: 'fg_pv_',
+        },
+        {
+          Action: 'DescribeDataEventUrl',
+          Version: '2021-06-22',
+          ProjectID: 'rum-6LsNkbT91rNlaj',
+          StartTime: startTime,
+          EndTime: endTime,
+          Type: 'ckuv',
+          ExtFirst: 'fg_pv_',
+        },
+        {
+          Action: 'DescribeDataEventUrl',
+          Version: '2021-06-22',
+          ProjectID: 'rum-6LsNkbT91rNlaj',
+          StartTime: startTime,
+          EndTime: endTime,
+          Type: 'ckpv',
+          ExtFirst: 'fg_action_',
+        },
+        {
+          Action: 'DescribeDataEventUrl',
+          Version: '2021-06-22',
+          ProjectID: 'rum-6LsNkbT91rNlaj',
+          StartTime: startTime,
+          EndTime: endTime,
+          Type: 'ckuv',
+          ExtFirst: 'fg_action_',
+        },
+        {
+          Action: 'DescribeDataEventUrl',
+          Version: '2021-06-22',
+          ProjectID: 'rum-6LsNkbT91rNlaj',
+          StartTime: startTime,
+          EndTime: endTime,
+          Type: 'day',
+          Name: 'fg_action_register',
+        },
+        {
+          Action: 'DescribeDataEventUrl',
+          Version: '2021-06-22',
+          ProjectID: 'rum-6LsNkbT91rNlaj',
+          StartTime: startTime,
+          EndTime: endTime,
+          Type: 'ckpv',
+          Name: 'fg_click_album_create',
+        },
+        {
+          Action: 'DescribeDataEventUrl',
+          Version: '2021-06-22',
+          ProjectID: 'rum-6LsNkbT91rNlaj',
+          StartTime: startTime,
+          EndTime: endTime,
+          Type: 'ckuv',
+          Name: 'fg_click_album_create',
+        },
+        {
+          Action: 'DescribeDataEventUrl',
+          Version: '2021-06-22',
+          ProjectID: 'rum-6LsNkbT91rNlaj',
+          StartTime: startTime,
+          EndTime: endTime,
+          Type: 'condition',
+          ExtFirst: 'fg_error_',
+        },
+      ]
+
+      const batchResults = await rumService.callRUMAPIBatch(batchRequests).catch(() => {
+        // 如果批量调用失败，返回空结果数组
+        return Array(8).fill(null).map((_, index) => ({
+          success: false,
+          index,
+          error: '批量调用失败',
+        }))
+      })
+
+      // 解析批量调用结果
       const [
         pagePVResult,
         pageUVResult,
@@ -70,16 +155,14 @@ export default function DashboardPage() {
         albumPVResult,
         albumUVResult,
         errorResult,
-      ] = await Promise.all([
-        rumService.getPagePV(startTime, endTime).catch(() => ({ results: [] })),
-        rumService.getPageUV(startTime, endTime).catch(() => ({ results: [] })),
-        rumService.getAppPV(startTime, endTime).catch(() => ({ results: [] })),
-        rumService.getAppUV(startTime, endTime).catch(() => ({ results: [] })),
-        rumService.getNewUserRegistration(startTime, endTime).catch(() => ({ results: [] })),
-        rumService.getAlbumCreationPV(startTime, endTime).catch(() => ({ results: [] })),
-        rumService.getAlbumCreationUV(startTime, endTime).catch(() => ({ results: [] })),
-        rumService.getErrorReports(startTime, endTime).catch(() => ({ results: [] })),
-      ])
+      ] = batchResults.map((result) => {
+        if (result.success && result.data) {
+          // SDK 返回的数据格式：{ Response: { ... } }
+          return result.data.Response || result.data
+        }
+        // 失败时返回空结果
+        return { results: [] }
+      })
 
       // 处理页面PV/UV
       const pagePV = pagePVResult.results?.reduce((sum: number, item: any) => sum + (item.total || 0), 0) || 0

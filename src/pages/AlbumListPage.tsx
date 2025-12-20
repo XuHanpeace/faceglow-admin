@@ -303,6 +303,22 @@ export default function AlbumListPage() {
         }
       }
 
+      // 异步任务 - 豆包图生图
+      if (taskType === 'async_doubao_image_to_image') {
+        if (editingAlbum.src_image) {
+          updates.src_image = editingAlbum.src_image
+        }
+        if (editingAlbum.result_image) {
+          updates.result_image = editingAlbum.result_image
+        }
+        if (editingAlbum.prompt_text !== undefined) {
+          updates.prompt_text = editingAlbum.prompt_text
+        }
+        if (editingAlbum.style_description !== undefined) {
+          updates.style_description = editingAlbum.style_description
+        }
+      }
+
       await albumService.updateAlbum(editingAlbum.album_id, updates)
       message.success('保存成功')
       setEditModalVisible(false)
@@ -335,6 +351,7 @@ export default function AlbumListPage() {
       'async_image_to_video': '异步执行 - 图生视频',
       'async_video_effect': '异步执行 - 视频特效',
       'async_portrait_style_redraw': '异步执行 - 人像风格重绘',
+      'async_doubao_image_to_image': '异步执行 - 豆包图生图',
       // 向后兼容
       'sync': '同步执行（sync）',
       'async': '异步执行（async）',
@@ -350,6 +367,7 @@ export default function AlbumListPage() {
     { value: 'async_image_to_video', label: '异步执行 - 图生视频（调用 callBailian）' },
     { value: 'async_video_effect', label: '异步执行 - 视频特效（调用 callBailian）' },
     { value: 'async_portrait_style_redraw', label: '异步执行 - 人像风格重绘（调用 callBailian）' },
+    { value: 'async_doubao_image_to_image', label: '异步执行 - 豆包图生图（调用 callBailian）' },
   ]
 
   // 获取功能类型选项
@@ -625,8 +643,8 @@ export default function AlbumListPage() {
 
             <div style={{ marginBottom: 16 }}>
               <label style={{ display: 'block', marginBottom: 8 }}>
-                任务执行类型：
-                <Tooltip title="选择任务执行类型，决定调用哪个云函数以及需要填写哪些参数">
+                选择模型：
+                <Tooltip title="选择模型，决定调用哪个云函数以及需要填写哪些参数">
                   <span style={{ marginLeft: 4, color: '#1890ff', cursor: 'help' }}>❓</span>
                 </Tooltip>
               </label>
@@ -636,7 +654,7 @@ export default function AlbumListPage() {
                   setEditingAlbum({ ...editingAlbum, task_execution_type: value })
                 }}
                 style={{ width: '100%' }}
-                placeholder="选择任务执行类型"
+                placeholder="选择模型"
               >
                 {taskExecutionTypeOptions.map((option) => (
                   <Option key={option.value} value={option.value}>
@@ -1144,6 +1162,128 @@ export default function AlbumListPage() {
                     }}
                     rows={3}
                     placeholder="输入风格描述"
+                  />
+                </div>
+              </>
+            )}
+
+            {/* 异步任务 - 豆包图生图配置 */}
+            {editingAlbum.task_execution_type === 'async_doubao_image_to_image' && (
+              <>
+                <Divider>豆包图生图配置</Divider>
+
+                <div style={{ marginBottom: 16 }}>
+                  <label style={{ display: 'block', marginBottom: 8 }}>Prompt文本（prompt_text）：</label>
+                  <TextArea
+                    value={editingAlbum.prompt_text || ''}
+                    onChange={(e) => {
+                      setEditingAlbum({ ...editingAlbum, prompt_text: e.target.value })
+                    }}
+                    rows={4}
+                    placeholder="输入Prompt文本，描述要生成的图片效果"
+                  />
+                  <div style={{ marginTop: 8, fontSize: 12, color: '#666' }}>
+                    提示：豆包图生图需要至少2张参考图片，请确保已上传原始图
+                  </div>
+                </div>
+
+                <div style={{ marginBottom: 16 }}>
+                  <label style={{ display: 'block', marginBottom: 8 }}>原始图（src_image）：</label>
+                  <Row gutter={16}>
+                    <Col span={12}>
+                      <Upload
+                        listType="picture-card"
+                        maxCount={1}
+                        beforeUpload={() => false}
+                        onChange={handleSrcImageChange}
+                        accept="image/*"
+                        showUploadList={false}
+                      >
+                        {(srcImagePreview || editingAlbum.src_image) ? (
+                          <Image
+                            src={srcImagePreview || editingAlbum.src_image}
+                            alt="原始图"
+                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                            preview={false}
+                          />
+                        ) : (
+                          <div>
+                            <UploadOutlined />
+                            <div style={{ marginTop: 8 }}>上传原始图</div>
+                          </div>
+                        )}
+                      </Upload>
+                    </Col>
+                    <Col span={12}>
+                      <div>
+                        <div style={{ marginBottom: 8, fontSize: 12, color: '#666' }}>图片URL：</div>
+                        <Input
+                          value={editingAlbum.src_image || ''}
+                          onChange={(e) => {
+                            setEditingAlbum({ ...editingAlbum, src_image: e.target.value })
+                          }}
+                          placeholder="输入或上传原始图URL"
+                          style={{ fontSize: 12 }}
+                          allowClear
+                        />
+                      </div>
+                    </Col>
+                  </Row>
+                </div>
+
+                <div style={{ marginBottom: 16 }}>
+                  <label style={{ display: 'block', marginBottom: 8 }}>结果图（result_image）：</label>
+                  <Row gutter={16}>
+                    <Col span={12}>
+                      <Upload
+                        listType="picture-card"
+                        maxCount={1}
+                        beforeUpload={() => false}
+                        onChange={handleResultImageChange}
+                        accept="image/*"
+                        showUploadList={false}
+                      >
+                        {(resultImagePreview || editingAlbum.result_image) ? (
+                          <Image
+                            src={resultImagePreview || editingAlbum.result_image}
+                            alt="结果图"
+                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                            preview={false}
+                          />
+                        ) : (
+                          <div>
+                            <UploadOutlined />
+                            <div style={{ marginTop: 8 }}>上传结果图</div>
+                          </div>
+                        )}
+                      </Upload>
+                    </Col>
+                    <Col span={12}>
+                      <div>
+                        <div style={{ marginBottom: 8, fontSize: 12, color: '#666' }}>图片URL：</div>
+                        <Input
+                          value={editingAlbum.result_image || ''}
+                          onChange={(e) => {
+                            setEditingAlbum({ ...editingAlbum, result_image: e.target.value })
+                          }}
+                          placeholder="输入或上传结果图URL"
+                          style={{ fontSize: 12 }}
+                          allowClear
+                        />
+                      </div>
+                    </Col>
+                  </Row>
+                </div>
+
+                <div style={{ marginBottom: 16 }}>
+                  <label style={{ display: 'block', marginBottom: 8 }}>风格描述（style_description）：</label>
+                  <TextArea
+                    value={editingAlbum.style_description || ''}
+                    onChange={(e) => {
+                      setEditingAlbum({ ...editingAlbum, style_description: e.target.value })
+                    }}
+                    rows={3}
+                    placeholder="输入风格描述（可选）"
                   />
                 </div>
               </>

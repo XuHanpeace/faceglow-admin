@@ -17,7 +17,7 @@ export function Sidebar({
     icon: Database
   }, {
     id: 'batch-generate',
-    label: '批量生产',
+    label: '创建相册',
     icon: Image
   }, {
     id: 'categories',

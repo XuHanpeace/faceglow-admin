@@ -2,7 +2,7 @@ import axios from 'axios'
 import { CLOUDBASE_CONFIG } from '../config/cloudbase'
 
 // 腾讯云RUM API配置
-const RUM_PROJECT_ID = 1 // 需要根据实际情况配置，从aegis配置中获取
+const RUM_PROJECT_ID = 'rum-6LsNkbT91rNlaj'// 需要根据实际情况配置，从aegis配置中获取
 
 /**
  * RUM服务
@@ -14,10 +14,6 @@ class RUMService {
    */
   private async callRUMAPI(params: Record<string, any>): Promise<any> {
     try {
-      // 注意：这里需要实现腾讯云API的签名逻辑
-      // 为了简化，这里假设通过云函数来调用
-      // 实际应该创建云函数来处理签名和API调用
-      
       const response = await axios.post(
         `${CLOUDBASE_CONFIG.FUNCTION_API.BASE_URL}/callRUMAPI`,
         params,
@@ -41,6 +37,80 @@ class RUMService {
   }
 
   /**
+   * 批量调用腾讯云RUM API（推荐使用，减少请求次数）
+   */
+  async callRUMAPIBatch(requests: Array<Record<string, any>>): Promise<Array<{ success: boolean; data?: any; error?: string; index: number }>> {
+    try {
+      const response = await axios.post(
+        `${CLOUDBASE_CONFIG.FUNCTION_API.BASE_URL}/callRUMAPI`,
+        {
+          batch: requests,
+        },
+        {
+          timeout: 60000, // 批量调用可能需要更长时间
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      )
+
+      if (response.data && (response.data.code === 200 || response.data.code === 207)) {
+        // 处理批量调用结果
+        const results: Array<{ success: boolean; data?: any; error?: string; index: number }> = []
+        
+        // 获取所有索引
+        const allIndices = new Set<number>()
+        if (response.data.results) {
+          response.data.results.forEach((r: any) => allIndices.add(r.index))
+        }
+        if (response.data.errors) {
+          response.data.errors.forEach((e: any) => allIndices.add(e.index))
+        }
+        
+        const maxIndex = allIndices.size > 0 ? Math.max(...Array.from(allIndices)) : -1
+        
+        // 初始化结果数组
+        for (let i = 0; i <= maxIndex; i++) {
+          results[i] = {
+            success: false,
+            index: i,
+            error: '未找到结果',
+          }
+        }
+        
+        // 处理成功的结果
+        if (response.data.results) {
+          response.data.results.forEach((item: any) => {
+            results[item.index] = {
+              success: true,
+              data: item.data,
+              index: item.index,
+            }
+          })
+        }
+        
+        // 处理失败的结果
+        if (response.data.errors) {
+          response.data.errors.forEach((item: any) => {
+            results[item.index] = {
+              success: false,
+              error: item.error,
+              index: item.index,
+            }
+          })
+        }
+        
+        return results
+      } else {
+        throw new Error(response.data?.message || '批量调用RUM API失败')
+      }
+    } catch (error: any) {
+      console.error('批量调用RUM API失败:', error)
+      throw new Error(error.response?.data?.message || error.message || '批量调用RUM API失败')
+    }
+  }
+
+  /**
    * 获取自定义事件数据
    */
   async getEventData(params: {
@@ -55,7 +125,7 @@ class RUMService {
     return this.callRUMAPI({
       Action: 'DescribeDataEventUrl',
       Version: '2021-06-22',
-      ID: RUM_PROJECT_ID,
+      ProjectID: RUM_PROJECT_ID,
       StartTime: params.startTime,
       EndTime: params.endTime,
       Type: params.type,

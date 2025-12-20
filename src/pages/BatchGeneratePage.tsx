@@ -230,7 +230,7 @@ export default function BatchGeneratePage() {
         return
       }
 
-      // 视频特效不需要 prompt_text
+      // 视频特效不需要 prompt_text，其他任务都需要
       if (taskExecutionType !== 'async_video_effect' && !formValues.prompt_text?.trim()) {
         message.warning('请填入Prompt文本')
         return
@@ -367,12 +367,12 @@ export default function BatchGeneratePage() {
     <div className="flex">
       <Sidebar activePage={activePage} onNavigate={handleNavigate} />
       <div className="flex-1 ml-64">
-        <Header user={{ name: '管理员', avatarUrl: '' }} title="批量生图" />
+        <Header user={{ name: '管理员', avatarUrl: '' }} title="创建相册" />
         <main className="p-6 mt-16">
           <Row gutter={[24, 24]}>
             {/* 左侧表单 */}
             <Col xs={24} lg={16}>
-              <Card title="批量生图" style={{ marginBottom: 24 }}>
+              <Card title="创建相册" style={{ marginBottom: 24 }}>
                 <Form 
                   form={form} 
                   layout="vertical" 
@@ -406,12 +406,12 @@ export default function BatchGeneratePage() {
                     <Col span={12}>
                       <Form.Item 
                         name="task_execution_type" 
-                        label="任务执行类型" 
-                        rules={[{ required: true, message: '请选择任务执行类型' }]}
-                        tooltip="选择任务执行类型，决定调用哪个云函数以及需要填写哪些参数"
+                        label="选择模型" 
+                        rules={[{ required: true, message: '请选择模型' }]}
+                        tooltip="选择模型，决定调用哪个云函数以及需要填写哪些参数"
                       >
                         <Select 
-                          placeholder="选择任务执行类型"
+                          placeholder="选择模型"
                           onChange={(value) => setTaskExecutionType(value)}
                         >
                           <Option value="sync_portrait">同步执行 - 个人写真换脸（调用 fusion）</Option>
@@ -420,6 +420,7 @@ export default function BatchGeneratePage() {
                           <Option value="async_image_to_video">异步执行 - 图生视频（调用 callBailian）</Option>
                           <Option value="async_video_effect">异步执行 - 视频特效（调用 callBailian）</Option>
                           <Option value="async_portrait_style_redraw">异步执行 - 人像风格重绘（调用 callBailian）</Option>
+                          <Option value="async_doubao_image_to_image">异步执行 - 豆包图生图（调用 callBailian）</Option>
                         </Select>
                       </Form.Item>
                     </Col>
@@ -638,7 +639,7 @@ export default function BatchGeneratePage() {
                     </>
                   )}
 
-                  {/* Prompt文本 - 视频特效不需要 */}
+                  {/* Prompt文本 - 视频特效不需要，其他任务都需要 */}
                   {taskExecutionType !== 'async_video_effect' && (
                     <Form.Item 
                       name="prompt_text" 
