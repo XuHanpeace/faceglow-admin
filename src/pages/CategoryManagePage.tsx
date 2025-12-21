@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
-import { message, Modal, Input, Select, Switch, Button, Card, Tag, Space, Divider } from 'antd'
+import { useState, useEffect, useMemo } from 'react'
+import { message, Modal, Input, Select, Switch, Button, Card, Tag, Space, Divider, Form } from 'antd'
 import { PlusOutlined, EditOutlined, DeleteOutlined, DragOutlined, ArrowUpOutlined, ArrowDownOutlined } from '@ant-design/icons'
 import { categoryService } from '../services/categoryService'
 import type { CategoryConfigRecord } from '../types/category'
@@ -33,7 +33,7 @@ export default function CategoryManagePage() {
   const [editingCategory, setEditingCategory] = useState<CategoryConfigRecord | null>(null)
   const [editModalVisible, setEditModalVisible] = useState(false)
 
-  // 表单状态
+  // 创建表单状态
   const [formData, setFormData] = useState({
     category_type: CategoryType.FUNCTION_TYPE,
     category_code: '',
@@ -46,6 +46,15 @@ export default function CategoryManagePage() {
       supported_theme_styles: [] as string[],
       is_featured: false,
     }
+  })
+
+  // 编辑表单状态
+  const [editFormData, setEditFormData] = useState({
+    category_label: '',
+    category_label_zh: '',
+    icon: '',
+    sort_order: 0,
+    is_active: true,
   })
 
   // 获取所有分类
@@ -66,10 +75,24 @@ export default function CategoryManagePage() {
     fetchCategories()
   }, [])
 
-  // 按类型分组
-  const functionTypes = categories.filter(c => c.category_type === CategoryType.FUNCTION_TYPE)
-  const themeStyles = categories.filter(c => c.category_type === CategoryType.THEME_STYLE)
-  const activityTags = categories.filter(c => c.category_type === CategoryType.ACTIVITY_TAG)
+  // 按类型分组并排序（sort_order 升序，值越小越靠前）
+  const functionTypes = useMemo(() => {
+    return categories
+      .filter(c => c.category_type === CategoryType.FUNCTION_TYPE)
+      .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+  }, [categories])
+
+  const themeStyles = useMemo(() => {
+    return categories
+      .filter(c => c.category_type === CategoryType.THEME_STYLE)
+      .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+  }, [categories])
+
+  const activityTags = useMemo(() => {
+    return categories
+      .filter(c => c.category_type === CategoryType.ACTIVITY_TAG)
+      .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+  }, [categories])
 
   // 处理创建分类
   const handleCreate = async () => {
@@ -154,6 +177,49 @@ export default function CategoryManagePage() {
     })
   }
 
+  // 打开编辑弹窗
+  const handleOpenEdit = (category: CategoryConfigRecord) => {
+    setEditingCategory(category)
+    setEditFormData({
+      category_label: category.category_label || '',
+      category_label_zh: category.category_label_zh || '',
+      icon: category.icon || '',
+      sort_order: category.sort_order ?? 0,
+      is_active: category.is_active ?? true,
+    })
+    setEditModalVisible(true)
+  }
+
+  // 保存编辑
+  const handleSaveEdit = async () => {
+    if (!editingCategory) return
+
+    try {
+      if (!editFormData.category_label) {
+        message.error('请填写分类标签')
+        return
+      }
+
+      // 合并 extra_config，避免丢失字段（如功能类型的 supported_theme_styles）
+      const updates: Partial<CategoryConfigRecord> = {
+        category_label: editFormData.category_label,
+        category_label_zh: editFormData.category_label_zh,
+        icon: editFormData.icon,
+        sort_order: editFormData.sort_order,
+        is_active: editFormData.is_active,
+        extra_config: {
+          ...(editingCategory.extra_config || {}),
+        }
+      }
+
+      await handleUpdate(editingCategory.category_id, updates)
+      setEditModalVisible(false)
+      setEditingCategory(null)
+    } catch (error) {
+      // handleUpdate 内部已经处理了错误提示
+    }
+  }
+
   // 重置表单
   const resetForm = () => {
     setFormData({
@@ -209,10 +275,20 @@ export default function CategoryManagePage() {
                         <Tag color="purple">{funcType.category_label}</Tag>
                         <span className="text-sm text-gray-500 ml-2">({funcType.category_code})</span>
                       </span>
-                      <Switch
-                        checked={funcType.is_active}
-                        onChange={(checked) => handleUpdate(funcType.category_id, { is_active: checked })}
-                      />
+                      <Space>
+                        <Button
+                          type="text"
+                          size="small"
+                          icon={<EditOutlined />}
+                          onClick={() => handleOpenEdit(funcType)}
+                        >
+                          编辑
+                        </Button>
+                        <Switch
+                          checked={funcType.is_active}
+                          onChange={(checked) => handleUpdate(funcType.category_id, { is_active: checked })}
+                        />
+                      </Space>
                     </div>
                   }
                   className="mb-4"
@@ -289,10 +365,20 @@ export default function CategoryManagePage() {
                 <Card key={theme.category_id} size="small">
                   <div className="flex items-center justify-between">
                     <Tag color="blue">{theme.category_label}</Tag>
-                    <Switch
-                      checked={theme.is_active}
-                      onChange={(checked) => handleUpdate(theme.category_id, { is_active: checked })}
-                    />
+                    <Space>
+                      <Button
+                        type="text"
+                        size="small"
+                        icon={<EditOutlined />}
+                        onClick={() => handleOpenEdit(theme)}
+                      >
+                        编辑
+                      </Button>
+                      <Switch
+                        checked={theme.is_active}
+                        onChange={(checked) => handleUpdate(theme.category_id, { is_active: checked })}
+                      />
+                    </Space>
                   </div>
                   <div className="text-xs text-gray-500 mt-2">{theme.category_code}</div>
                 </Card>
@@ -307,10 +393,20 @@ export default function CategoryManagePage() {
                 <Card key={tag.category_id} size="small">
                   <div className="flex items-center justify-between">
                     <Tag color="green">{tag.category_label}</Tag>
-                    <Switch
-                      checked={tag.is_active}
-                      onChange={(checked) => handleUpdate(tag.category_id, { is_active: checked })}
-                    />
+                    <Space>
+                      <Button
+                        type="text"
+                        size="small"
+                        icon={<EditOutlined />}
+                        onClick={() => handleOpenEdit(tag)}
+                      >
+                        编辑
+                      </Button>
+                      <Switch
+                        checked={tag.is_active}
+                        onChange={(checked) => handleUpdate(tag.category_id, { is_active: checked })}
+                      />
+                    </Space>
                   </div>
                   <div className="text-xs text-gray-500 mt-2">{tag.category_code}</div>
                 </Card>
@@ -387,6 +483,89 @@ export default function CategoryManagePage() {
                   <Switch
                     checked={formData.is_active}
                     onChange={(checked) => setFormData({ ...formData, is_active: checked })}
+                  />
+                  <span className="ml-2">是否激活</span>
+                </label>
+              </div>
+            </div>
+          </Modal>
+
+          {/* 编辑分类弹窗 */}
+          <Modal
+            title="编辑分类"
+            open={editModalVisible}
+            onOk={handleSaveEdit}
+            onCancel={() => {
+              setEditModalVisible(false)
+              setEditingCategory(null)
+            }}
+            width={600}
+          >
+            <div className="space-y-4">
+              <div className="text-sm text-gray-500 mb-4">
+                按权重从小到大排序（值越小越靠前）
+              </div>
+              <div>
+                <label className="block mb-2">分类类型</label>
+                <Input
+                  value={
+                    editingCategory?.category_type === CategoryType.FUNCTION_TYPE
+                      ? '功能类型'
+                      : editingCategory?.category_type === CategoryType.THEME_STYLE
+                      ? '主题风格'
+                      : editingCategory?.category_type === CategoryType.ACTIVITY_TAG
+                      ? '活动标签'
+                      : editingCategory?.category_type || ''
+                  }
+                  disabled
+                  className="w-full"
+                />
+              </div>
+              <div>
+                <label className="block mb-2">分类代码</label>
+                <Input
+                  value={editingCategory?.category_code || ''}
+                  disabled
+                  className="w-full"
+                />
+              </div>
+              <div>
+                <label className="block mb-2">分类标签 *</label>
+                <Input
+                  value={editFormData.category_label}
+                  onChange={(e) => setEditFormData({ ...editFormData, category_label: e.target.value })}
+                  placeholder="如: 个人写真, 拍立得, 折扣"
+                />
+              </div>
+              <div>
+                <label className="block mb-2">中文标签</label>
+                <Input
+                  value={editFormData.category_label_zh}
+                  onChange={(e) => setEditFormData({ ...editFormData, category_label_zh: e.target.value })}
+                  placeholder="可选"
+                />
+              </div>
+              <div>
+                <label className="block mb-2">图标</label>
+                <Input
+                  value={editFormData.icon}
+                  onChange={(e) => setEditFormData({ ...editFormData, icon: e.target.value })}
+                  placeholder="FontAwesome 图标名称，如: camera, user"
+                />
+              </div>
+              <div>
+                <label className="block mb-2">排序权重</label>
+                <Input
+                  type="number"
+                  value={editFormData.sort_order}
+                  onChange={(e) => setEditFormData({ ...editFormData, sort_order: parseInt(e.target.value) || 0 })}
+                />
+              </div>
+              <div>
+                <label className="block mb-2">
+                  <Switch
+                    checked={editFormData.is_active}
+                    onChange={(checked) => setEditFormData({ ...editFormData, is_active: checked })}
                   />
                   <span className="ml-2">是否激活</span>
                 </label>
