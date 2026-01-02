@@ -13,6 +13,7 @@ export function Header({
     'dashboard': '数据大盘',
     'albums': '相册管理',
     'batch-generate': '批量生产',
+    'workflow': '工作流创建',
     'categories': '分类管理',
     'products': '商品管理',
     'orders': '订单管理',

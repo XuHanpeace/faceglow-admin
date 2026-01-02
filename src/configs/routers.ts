@@ -15,6 +15,7 @@ import DashboardPage from '../pages/DashboardPage';
 import AlbumListPage from '../pages/AlbumListPage';
 import BatchGeneratePage from '../pages/BatchGeneratePage';
 import CategoryManagePage from '../pages/CategoryManagePage';
+import WorkflowPage from '../pages/WorkflowPage';
 
 export const routers = [
   {
@@ -33,6 +34,10 @@ export const routers = [
   {
     id: "categories",
     component: CategoryManagePage
+  },
+  {
+    id: "workflow",
+    component: WorkflowPage
   },
   {
     id: "products",

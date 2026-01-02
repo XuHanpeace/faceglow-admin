@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { message, Modal, Input, Select, Switch, Button, Card, Tag, Space, Divider, Form } from 'antd'
+import { message, Modal, Input, Select, Switch, Button, Card, Tag, Space, Divider, Form, Checkbox } from 'antd'
 import { PlusOutlined, EditOutlined, DeleteOutlined, DragOutlined, ArrowUpOutlined, ArrowDownOutlined } from '@ant-design/icons'
 import { categoryService } from '../services/categoryService'
 import type { CategoryConfigRecord } from '../types/category'
@@ -32,6 +32,7 @@ export default function CategoryManagePage() {
   const [createModalVisible, setCreateModalVisible] = useState(false)
   const [editingCategory, setEditingCategory] = useState<CategoryConfigRecord | null>(null)
   const [editModalVisible, setEditModalVisible] = useState(false)
+  const [showActiveOnly, setShowActiveOnly] = useState(true) // 默认只显示生效中的
 
   // 创建表单状态
   const [formData, setFormData] = useState({
@@ -77,20 +78,39 @@ export default function CategoryManagePage() {
 
   // 按类型分组并排序（sort_order 升序，值越小越靠前）
   const functionTypes = useMemo(() => {
-    return categories
-      .filter(c => c.category_type === CategoryType.FUNCTION_TYPE)
-      .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
-  }, [categories])
+    const filtered = categories.filter(c => c.category_type === CategoryType.FUNCTION_TYPE)
+    if (showActiveOnly) {
+      return filtered
+        .filter(c => c.is_active === true)
+        .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+    }
+    return filtered.sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+  }, [categories, showActiveOnly])
 
   const themeStyles = useMemo(() => {
-    return categories
-      .filter(c => c.category_type === CategoryType.THEME_STYLE)
-      .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
-  }, [categories])
+    const filtered = categories.filter(c => c.category_type === CategoryType.THEME_STYLE)
+    if (showActiveOnly) {
+      return filtered
+        .filter(c => c.is_active === true)
+        .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+    }
+    return filtered.sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+  }, [categories, showActiveOnly])
 
   const activityTags = useMemo(() => {
+    const filtered = categories.filter(c => c.category_type === CategoryType.ACTIVITY_TAG)
+    if (showActiveOnly) {
+      return filtered
+        .filter(c => c.is_active === true)
+        .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+    }
+    return filtered.sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+  }, [categories, showActiveOnly])
+
+  // 所有主题风格（不受筛选影响，用于"可添加的主题风格"）
+  const allThemeStyles = useMemo(() => {
     return categories
-      .filter(c => c.category_type === CategoryType.ACTIVITY_TAG)
+      .filter(c => c.category_type === CategoryType.THEME_STYLE)
       .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
   }, [categories])
 
@@ -245,24 +265,35 @@ export default function CategoryManagePage() {
         <div className="p-6 mt-16">
           <div className="flex justify-between items-center mb-6">
             <h1 className="text-2xl font-bold">分类管理</h1>
-            <Button
-              type="primary"
-              icon={<PlusOutlined />}
-              onClick={() => {
-                resetForm()
-                setCreateModalVisible(true)
-              }}
-            >
-              新建分类
-            </Button>
+            <div className="flex items-center gap-4">
+              <Checkbox
+                checked={showActiveOnly}
+                onChange={(e) => setShowActiveOnly(e.target.checked)}
+              >
+                只显示生效中的
+              </Checkbox>
+              <Button
+                type="primary"
+                icon={<PlusOutlined />}
+                onClick={() => {
+                  resetForm()
+                  setCreateModalVisible(true)
+                }}
+              >
+                新建分类
+              </Button>
+            </div>
           </div>
 
           {/* 功能类型管理 */}
           <Card title="功能类型 (Function Type)" className="mb-6">
+            {functionTypes.length === 0 && (
+              <div className="text-center text-gray-400 py-8">暂无功能类型</div>
+            )}
             {functionTypes.map(funcType => {
               const supportedStyles = funcType.extra_config?.supported_theme_styles || []
               const supportedThemeRecords = supportedStyles
-                .map(code => themeStyles.find(t => t.category_code === code))
+                .map(code => allThemeStyles.find(t => t.category_code === code))
                 .filter(Boolean) as CategoryConfigRecord[]
 
               return (
@@ -339,16 +370,18 @@ export default function CategoryManagePage() {
                   <div>
                     <div className="text-sm text-gray-600 mb-2">可添加的主题风格：</div>
                     <div className="flex flex-wrap gap-2">
-                      {themeStyles
+                      {allThemeStyles
                         .filter(theme => !supportedStyles.includes(theme.category_code))
                         .map(theme => (
                           <Tag
                             key={theme.category_id}
-                            color="default"
+                            color={theme.is_active ? "default" : "default"}
                             className="cursor-pointer"
+                            style={!theme.is_active ? { opacity: 0.6, borderStyle: 'dashed' } : {}}
                             onClick={() => handleAddThemeStyle(funcType, theme)}
                           >
                             {theme.category_label}
+                            {!theme.is_active && <span className="ml-1 text-xs text-gray-400">(已下线)</span>}
                           </Tag>
                         ))}
                     </div>
@@ -360,6 +393,9 @@ export default function CategoryManagePage() {
 
           {/* 主题风格列表 */}
           <Card title="主题风格 (Theme Style)" className="mb-6">
+            {themeStyles.length === 0 && (
+              <div className="text-center text-gray-400 py-8">暂无主题风格</div>
+            )}
             <div className="grid grid-cols-4 gap-4">
               {themeStyles.map(theme => (
                 <Card key={theme.category_id} size="small">
@@ -388,6 +424,9 @@ export default function CategoryManagePage() {
 
           {/* 活动标签列表 */}
           <Card title="活动标签 (Activity Tag)">
+            {activityTags.length === 0 && (
+              <div className="text-center text-gray-400 py-8">暂无活动标签</div>
+            )}
             <div className="grid grid-cols-4 gap-4">
               {activityTags.map(tag => (
                 <Card key={tag.category_id} size="small">

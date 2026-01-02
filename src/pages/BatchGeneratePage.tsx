@@ -12,6 +12,8 @@ import {
   InputNumber,
   Input,
   Upload,
+  Switch,
+  Tooltip,
 } from 'antd'
 import { UploadOutlined } from '@ant-design/icons'
 import type { UploadFile } from 'antd/es/upload/interface'
@@ -46,6 +48,8 @@ interface FormData {
   video_effect_template?: string
   // 图生视频相关
   audio_url?: string
+  // 豆包图生图相关
+  exclude_result_image?: boolean
 }
 
 export default function BatchGeneratePage() {
@@ -70,6 +74,8 @@ export default function BatchGeneratePage() {
   const [categories, setCategories] = useState<CategoryConfigRecord[]>([])
   const [coverImageFile, setCoverImageFile] = useState<UploadFile | null>(null)
   const [coverImagePreview, setCoverImagePreview] = useState<string>('')
+  const [previewVideoFile, setPreviewVideoFile] = useState<UploadFile | null>(null)
+  const [previewVideoPreview, setPreviewVideoPreview] = useState<string>('')
   const [srcImageFile, setSrcImageFile] = useState<UploadFile | null>(null)
   const [srcImagePreview, setSrcImagePreview] = useState<string>('')
   const [uploading, setUploading] = useState(false)
@@ -78,17 +84,18 @@ export default function BatchGeneratePage() {
     album_image?: string
     result_image?: string
     src_image?: string
+    preview_video_url?: string
   }>({})
   
   // 监听任务执行类型变化
-  const [taskExecutionType, setTaskExecutionType] = useState<string>('sync_portrait')
+  const [taskExecutionType, setTaskExecutionType] = useState<string>('async_doubao_image_to_image')
 
   // 获取Category配置
   const fetchCategories = async () => {
     try {
       const response = await categoryService.getCategoryConfig()
       setCategories(response.data || [])
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('获取Category配置失败:', error)
       message.error('获取Category配置失败')
     }
@@ -97,7 +104,7 @@ export default function BatchGeneratePage() {
   useEffect(() => {
     fetchCategories()
     // 初始化时设置 taskExecutionType
-    const initialType = form.getFieldValue('task_execution_type') || 'sync_portrait'
+    const initialType = form.getFieldValue('task_execution_type') || 'async_doubao_image_to_image'
     setTaskExecutionType(initialType)
   }, [])
 
@@ -119,9 +126,9 @@ export default function BatchGeneratePage() {
   // 当图片文件或上传URL变化时更新预览
   useEffect(() => {
     updatePreview()
-  }, [coverImageFile, coverImagePreview, srcImageFile, srcImagePreview, uploadedUrls])
+  }, [coverImageFile, coverImagePreview, previewVideoFile, previewVideoPreview, srcImageFile, srcImagePreview, uploadedUrls])
 
-  // 处理封面图上传
+  // 处理封面图上传（支持图片和视频）
   const handleCoverImageChange = (info: any) => {
     const { file } = info
     if (file.status === 'removed' || !file) {
@@ -134,10 +141,32 @@ export default function BatchGeneratePage() {
     if (fileObj instanceof File) {
       setCoverImageFile(file as UploadFile)
       
-      // 生成预览
+      // 生成预览（支持图片和视频）
       const reader = new FileReader()
       reader.onload = (e) => {
         setCoverImagePreview(e.target?.result as string)
+      }
+      reader.readAsDataURL(fileObj)
+    }
+  }
+
+  // 处理预览视频上传
+  const handlePreviewVideoChange = (info: any) => {
+    const { file } = info
+    if (file.status === 'removed' || !file) {
+      setPreviewVideoFile(null)
+      setPreviewVideoPreview('')
+      return
+    }
+
+    const fileObj = file.originFileObj || file
+    if (fileObj instanceof File) {
+      setPreviewVideoFile(file as UploadFile)
+      
+      // 生成预览
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        setPreviewVideoPreview(e.target?.result as string)
       }
       reader.readAsDataURL(fileObj)
     }
@@ -185,7 +214,7 @@ export default function BatchGeneratePage() {
         level: formValues.level || AlbumLevel.FREE,
         price: formValues.price || 0,
         sort_weight: formValues.sort_weight || 0,
-        task_execution_type: formValues.task_execution_type || 'sync_portrait',
+        task_execution_type: formValues.task_execution_type || 'async_doubao_image_to_image',
         likes: 0,
         published: false,
         // 人像风格重绘相关字段
@@ -195,10 +224,13 @@ export default function BatchGeneratePage() {
         video_effect_template: formValues.video_effect_template,
         // 图生视频相关字段
         audio_url: formValues.audio_url,
+        // 豆包图生图相关字段
+        exclude_result_image: formValues.exclude_result_image,
         // 图片URL：如果已上传则显示真实URL，否则显示待上传
         album_image: uploadedUrls.album_image || (coverImageFile ? '[待上传]' : ''),
         result_image: uploadedUrls.result_image || (coverImageFile ? '[待上传]' : ''),
         src_image: uploadedUrls.src_image || (srcImageFile ? '[待上传]' : ''),
+        preview_video_url: uploadedUrls.preview_video_url || (previewVideoFile ? '[待上传]' : ''),
       }
     } catch (error) {
       return null
@@ -210,9 +242,20 @@ export default function BatchGeneratePage() {
     try {
       const formValues = await form.validateFields()
       
-      if (!coverImageFile) {
-        message.warning('请上传封面图')
-        return
+      // 判断是否为视频类型相册（视频特效或图生视频）
+      const isVideoType = taskExecutionType === 'async_video_effect' || taskExecutionType === 'async_image_to_video'
+      
+      // 视频类型需要上传 preview_video_url，非视频类型需要上传封面图
+      if (isVideoType) {
+        if (!previewVideoFile) {
+          message.warning('请上传预览视频')
+          return
+        }
+      } else {
+        if (!coverImageFile) {
+          message.warning('请上传封面图')
+          return
+        }
       }
 
       if (!srcImageFile) {
@@ -256,28 +299,66 @@ export default function BatchGeneratePage() {
 
       setUploading(true)
 
-      // 1. 上传封面图到COS
-      const coverFile = coverImageFile.originFileObj || (coverImageFile as unknown as File)
-      if (!(coverFile instanceof File)) {
-        throw new Error('封面图文件格式错误')
-      }
-      const coverFileName = `album_cover_${Date.now()}.${coverFile.name?.split('.').pop() || 'png'}`
-      const coverUploadResult = await cosUploadService.uploadFile({
-        file: coverFile,
-        fileName: coverFileName,
-        folder: 'albums',
-      })
+      let albumImageUrl = ''
+      let previewVideoUrl = ''
 
-      if (!coverUploadResult.success || !coverUploadResult.url) {
-        throw new Error(`上传封面图失败: ${coverUploadResult.error}`)
-      }
+      // 1. 根据类型上传封面图或预览视频
+      if (isVideoType) {
+        // 视频类型：上传预览视频
+        const videoFile = previewVideoFile!.originFileObj || (previewVideoFile as unknown as File)
+        if (!(videoFile instanceof File)) {
+          throw new Error('预览视频文件格式错误')
+        }
+        const fileExtension = videoFile.name?.split('.').pop() || 'mp4'
+        const videoFileName = `preview_video_${Date.now()}.${fileExtension}`
+        const videoUploadResult = await cosUploadService.uploadFile({
+          file: videoFile,
+          fileName: videoFileName,
+          folder: 'albums',
+        })
 
-      // 更新预览数据中的URL
-      setUploadedUrls({
-        album_image: coverUploadResult.url,
-        result_image: coverUploadResult.url,
-      })
-      updatePreview()
+        if (!videoUploadResult.success || !videoUploadResult.url) {
+          throw new Error(`上传预览视频失败: ${videoUploadResult.error}`)
+        }
+
+        previewVideoUrl = videoUploadResult.url
+        albumImageUrl = previewVideoUrl // 视频类型：album_image 使用 preview_video_url 的值
+
+        // 更新预览数据中的URL
+        setUploadedUrls({
+          preview_video_url: previewVideoUrl,
+          album_image: albumImageUrl,
+          result_image: albumImageUrl,
+        })
+        updatePreview()
+      } else {
+        // 非视频类型：上传封面图
+        const coverFile = coverImageFile!.originFileObj || (coverImageFile as unknown as File)
+        if (!(coverFile instanceof File)) {
+          throw new Error('封面图文件格式错误')
+        }
+        // 获取文件扩展名，支持图片和视频格式
+        const fileExtension = coverFile.name?.split('.').pop() || (coverFile.type?.includes('video') ? 'mp4' : 'png')
+        const coverFileName = `album_cover_${Date.now()}.${fileExtension}`
+        const coverUploadResult = await cosUploadService.uploadFile({
+          file: coverFile,
+          fileName: coverFileName,
+          folder: 'albums',
+        })
+
+        if (!coverUploadResult.success || !coverUploadResult.url) {
+          throw new Error(`上传封面图失败: ${coverUploadResult.error}`)
+        }
+
+        albumImageUrl = coverUploadResult.url
+
+        // 更新预览数据中的URL
+        setUploadedUrls({
+          album_image: albumImageUrl,
+          result_image: albumImageUrl,
+        })
+        updatePreview()
+      }
 
       // 2. 上传原始图到COS
       const srcFile = srcImageFile.originFileObj || (srcImageFile as unknown as File)
@@ -306,13 +387,13 @@ export default function BatchGeneratePage() {
       const albumData: Omit<AlbumRecord, 'album_id' | 'created_at' | 'updated_at'> = {
         album_name: formValues.album_name,
         album_description: formValues.album_description,
-        album_image: coverUploadResult.url,
-        result_image: coverUploadResult.url, // 封面图同时作为result_image
+        album_image: albumImageUrl, // 视频类型时使用 preview_video_url 的值，非视频类型使用封面图URL
+        result_image: albumImageUrl, // 封面图同时作为result_image
         src_image: srcUploadResult.url,
         theme_styles: formValues.theme_styles || [],
         function_type: formValues.function_type,
         activity_tags: formValues.activity_tags || [],
-        task_execution_type: formValues.task_execution_type || 'sync_portrait',
+        task_execution_type: formValues.task_execution_type || 'async_doubao_image_to_image',
         level: formValues.level || AlbumLevel.FREE,
         price: formValues.price || 0,
         prompt_text: formValues.prompt_text || '',
@@ -325,8 +406,12 @@ export default function BatchGeneratePage() {
         style_ref_url: formValues.style_ref_url,
         // 视频特效相关字段
         video_effect_template: formValues.video_effect_template,
+        // 视频类型：preview_video_url 和 album_image 使用相同的值
+        preview_video_url: isVideoType ? previewVideoUrl : undefined,
         // 图生视频相关字段
         audio_url: formValues.audio_url,
+        // 豆包图生图相关字段
+        exclude_result_image: formValues.exclude_result_image || false,
       }
 
       await albumService.createAlbum(albumData)
@@ -340,9 +425,10 @@ export default function BatchGeneratePage() {
       setSrcImageFile(null)
       setSrcImagePreview('')
       setUploadedUrls({})
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('上传或保存失败:', error)
-      message.error(error.message || '上传或保存失败')
+      const errorMessage = error instanceof Error ? error.message : '上传或保存失败'
+      message.error(errorMessage)
     } finally {
       setUploading(false)
     }
@@ -383,7 +469,7 @@ export default function BatchGeneratePage() {
                     sort_weight: 0,
                     theme_styles: [],
                     activity_tags: [],
-                    task_execution_type: 'sync_portrait',
+                    task_execution_type: 'async_doubao_image_to_image',
                   }}
                 >
                   {/* 功能类型和任务执行类型 - 紧凑布局 */}
@@ -463,33 +549,85 @@ export default function BatchGeneratePage() {
 
                   <Divider />
 
-                  {/* 图片上传 - 紧凑布局 */}
+                  {/* 图片/视频上传 - 紧凑布局 */}
                   <Row gutter={16}>
-                    <Col span={12}>
-                      <Form.Item label="封面图（album_image）" required>
-                        <Upload
-                          listType="picture-card"
-                          maxCount={1}
-                          beforeUpload={() => false}
-                          onChange={handleCoverImageChange}
-                          accept="image/*"
-                        >
-                          {coverImagePreview ? (
-                            <Image
-                              src={coverImagePreview}
-                              alt="封面图预览"
-                              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                              preview={false}
-                            />
-                          ) : (
-                            <div>
-                              <UploadOutlined />
-                              <div style={{ marginTop: 8 }}>上传封面图</div>
-                            </div>
-                          )}
-                        </Upload>
-                      </Form.Item>
-                    </Col>
+                    {/* 视频类型：显示预览视频上传，隐藏封面图 */}
+                    {(taskExecutionType === 'async_video_effect' || taskExecutionType === 'async_image_to_video') ? (
+                      <Col span={12}>
+                        <Form.Item label="预览视频（preview_video_url）" required>
+                          <Upload
+                            listType="picture-card"
+                            maxCount={1}
+                            beforeUpload={() => false}
+                            onChange={handlePreviewVideoChange}
+                            accept="video/mp4"
+                          >
+                            {previewVideoPreview ? (
+                              <video
+                                src={previewVideoPreview}
+                                style={{ 
+                                  width: '100%', 
+                                  height: '100%', 
+                                  objectFit: 'cover',
+                                  position: 'absolute',
+                                  top: 0,
+                                  left: 0,
+                                }}
+                                controls={false}
+                                muted
+                              />
+                            ) : (
+                              <div>
+                                <UploadOutlined />
+                                <div style={{ marginTop: 8 }}>上传预览视频</div>
+                              </div>
+                            )}
+                          </Upload>
+                        </Form.Item>
+                      </Col>
+                    ) : (
+                      <Col span={12}>
+                        <Form.Item label="封面图（album_image）" required>
+                          <Upload
+                            listType="picture-card"
+                            maxCount={1}
+                            beforeUpload={() => false}
+                            onChange={handleCoverImageChange}
+                            accept="image/*,video/mp4"
+                          >
+                            {coverImagePreview ? (
+                              coverImagePreview.startsWith('data:video/') ? (
+                                <video
+                                  src={coverImagePreview}
+                                  style={{ 
+                                    width: '100%', 
+                                    height: '100%', 
+                                    objectFit: 'cover',
+                                    position: 'absolute',
+                                    top: 0,
+                                    left: 0,
+                                  }}
+                                  controls={false}
+                                  muted
+                                />
+                              ) : (
+                                <Image
+                                  src={coverImagePreview}
+                                  alt="封面图预览"
+                                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                  preview={false}
+                                />
+                              )
+                            ) : (
+                              <div>
+                                <UploadOutlined />
+                                <div style={{ marginTop: 8 }}>上传封面图/视频</div>
+                              </div>
+                            )}
+                          </Upload>
+                        </Form.Item>
+                      </Col>
+                    )}
                     <Col span={12}>
                       <Form.Item label="原始图（src_image）" required>
                         <Upload
@@ -634,6 +772,50 @@ export default function BatchGeneratePage() {
                         tooltip="图生视频音频URL，仅wan2.5-i2v-preview支持"
                       >
                         <Input placeholder="输入音频URL（可选）" />
+                      </Form.Item>
+                      <Divider />
+                    </>
+                  )}
+
+                  {/* 豆包图生图配置 */}
+                  {taskExecutionType === 'async_doubao_image_to_image' && (
+                    <>
+                      <Form.Item 
+                        name="exclude_result_image" 
+                        label={
+                          <span>
+                            排除结果图（exclude_result_image）：
+                            <Tooltip title="开启后，生图时将不参考 result_image，仅使用用户自拍图 + prompt 生成。默认关闭（即参考 result_image），保持历史版本兼容。">
+                              <span style={{ marginLeft: 4, color: '#1890ff', cursor: 'help' }}>❓</span>
+                            </Tooltip>
+                          </span>
+                        }
+                        valuePropName="checked"
+                        initialValue={false}
+                      >
+                        <Switch />
+                      </Form.Item>
+                      <Form.Item
+                        noStyle
+                        shouldUpdate={(prevValues: Record<string, any>, currentValues: Record<string, any>) => 
+                          prevValues?.exclude_result_image !== currentValues?.exclude_result_image
+                        }
+                      >
+                        {({ getFieldValue }) => {
+                          const excludeResultImage = getFieldValue('exclude_result_image')
+                          return (
+                            <div style={{ marginBottom: 16, marginTop: -16 }}>
+                              <span style={{ fontSize: 12, color: '#666', marginLeft: 24 }}>
+                                {excludeResultImage 
+                                  ? '不参考 result_image，仅使用用户自拍图 + prompt' 
+                                  : '参考 result_image（默认：用户自拍图 + result_image + prompt）'}
+                              </span>
+                              <div style={{ marginTop: 8, fontSize: 12, color: '#666', marginLeft: 24 }}>
+                                提示：默认参考 result_image（用户自拍图 + result_image + prompt）。开启后仅使用用户自拍图 + prompt 生图，不参考 result_image。
+                              </div>
+                            </div>
+                          )
+                        }}
                       </Form.Item>
                       <Divider />
                     </>

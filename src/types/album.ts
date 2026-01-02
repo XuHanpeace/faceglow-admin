@@ -71,6 +71,8 @@ export interface AlbumRecord {
   // 人像风格重绘相关字段
   style_index?: number // 风格索引（0-9为预设风格，-1为自定义风格）
   style_ref_url?: string // 风格参考图URL（当style_index=-1时使用）
+  // 豆包图生图相关字段
+  exclude_result_image?: boolean // 是否排除 result_image（默认 false，即包含 result_image，保持历史版本兼容）
   // 发布状态
   published?: boolean
   created_at?: string

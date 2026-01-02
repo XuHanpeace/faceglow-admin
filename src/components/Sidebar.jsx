@@ -20,6 +20,10 @@ export function Sidebar({
     label: '创建相册',
     icon: Image
   }, {
+    id: 'workflow',
+    label: '工作流创建',
+    icon: Image
+  }, {
     id: 'categories',
     label: '分类管理',
     icon: Database

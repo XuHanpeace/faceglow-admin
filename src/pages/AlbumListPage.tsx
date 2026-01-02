@@ -317,6 +317,9 @@ export default function AlbumListPage() {
         if (editingAlbum.style_description !== undefined) {
           updates.style_description = editingAlbum.style_description
         }
+        if (editingAlbum.exclude_result_image !== undefined) {
+          updates.exclude_result_image = editingAlbum.exclude_result_image
+        }
       }
 
       await albumService.updateAlbum(editingAlbum.album_id, updates)
@@ -391,17 +394,56 @@ export default function AlbumListPage() {
       dataIndex: 'album_image',
       key: 'album_image',
       width: 100,
-      render: (url: string) => (
-        <img
-          src={url}
-          alt="封面"
-          style={{ width: 60, height: 60, objectFit: 'cover', borderRadius: 4, cursor: 'pointer' }}
-          onClick={() => setPreviewImage({ visible: true, url })}
-          onError={(e) => {
-            ;(e.target as HTMLImageElement).src = 'https://via.placeholder.com/60'
-          }}
-        />
-      ),
+      render: (url: string, record: AlbumRecord) => {
+        if (!url) {
+          return (
+            <div
+              style={{
+                width: 60,
+                height: 60,
+                border: '1px solid #ff4d4f',
+                borderRadius: 4,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#999',
+                fontSize: 12,
+              }}
+            >
+              无封面
+            </div>
+          )
+        }
+        
+        // 判断是否为视频文件
+        const isVideo = url.toLowerCase().endsWith('.mp4') || url.toLowerCase().includes('video')
+        
+        if (isVideo) {
+          return (
+            <video
+              src={url}
+              style={{ width: 60, height: 60, objectFit: 'cover', borderRadius: 4, cursor: 'pointer' }}
+              onClick={() => setPreviewImage({ visible: true, url })}
+              muted
+              onError={(e) => {
+                ;(e.target as HTMLVideoElement).style.display = 'none'
+              }}
+            />
+          )
+        }
+        
+        return (
+          <img
+            src={url}
+            alt="封面"
+            style={{ width: 60, height: 60, objectFit: 'cover', borderRadius: 4, cursor: 'pointer' }}
+            onClick={() => setPreviewImage({ visible: true, url })}
+            onError={(e) => {
+              ;(e.target as HTMLImageElement).src = 'https://via.placeholder.com/60'
+            }}
+          />
+        )
+      },
     },
     {
       title: '相册名称',
@@ -761,40 +803,52 @@ export default function AlbumListPage() {
 
                 <div style={{ marginBottom: 16 }}>
                   <label style={{ display: 'block', marginBottom: 8 }}>首帧图片（src_image）：</label>
-                  <Row gutter={16}>
+                  <Row gutter={16} align="top">
                     <Col span={12}>
-                      <Upload
-                        listType="picture-card"
-                        maxCount={1}
-                        beforeUpload={() => false}
-                        onChange={handleSrcImageChange}
-                        accept="image/*"
-                        showUploadList={false}
-                      >
-                        {(srcImagePreview || editingAlbum.src_image) ? (
-                          <Image
-                            src={srcImagePreview || editingAlbum.src_image}
-                            alt="首帧图片"
-                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                            preview={false}
-                          />
-                        ) : (
-                          <div>
-                            <UploadOutlined />
-                            <div style={{ marginTop: 8 }}>上传首帧图片</div>
-                          </div>
-                        )}
-                      </Upload>
+                      <div style={{ maxWidth: 200 }}>
+                        <Upload
+                          listType="picture-card"
+                          maxCount={1}
+                          beforeUpload={() => false}
+                          onChange={handleSrcImageChange}
+                          accept="image/*"
+                          showUploadList={false}
+                        >
+                          {(srcImagePreview || editingAlbum.src_image) ? (
+                            <Image
+                              src={srcImagePreview || editingAlbum.src_image}
+                              alt="首帧图片"
+                              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                              preview={false}
+                            />
+                          ) : (
+                            <div>
+                              <UploadOutlined />
+                              <div style={{ marginTop: 8 }}>上传首帧图片</div>
+                            </div>
+                          )}
+                        </Upload>
+                      </div>
                     </Col>
                     <Col span={12}>
                       <div>
-                        <div style={{ marginBottom: 8, fontSize: 12, color: '#666' }}>图片URL：</div>
+                        <div style={{ marginBottom: 8, fontSize: 12, color: '#666' }}>首帧图片URL（src_image）：</div>
                         <Input
                           value={editingAlbum.src_image || ''}
                           onChange={(e) => {
                             setEditingAlbum({ ...editingAlbum, src_image: e.target.value })
                           }}
                           placeholder="输入或上传首帧图片URL"
+                          style={{ fontSize: 12 }}
+                          allowClear
+                        />
+                        <div style={{ marginTop: 8, fontSize: 12, color: '#666' }}>结果图URL（result_image）：</div>
+                        <Input
+                          value={editingAlbum.result_image || ''}
+                          onChange={(e) => {
+                            setEditingAlbum({ ...editingAlbum, result_image: e.target.value })
+                          }}
+                          placeholder="输入或上传结果图URL"
                           style={{ fontSize: 12 }}
                           allowClear
                         />
@@ -1183,7 +1237,7 @@ export default function AlbumListPage() {
                     placeholder="输入Prompt文本，描述要生成的图片效果"
                   />
                   <div style={{ marginTop: 8, fontSize: 12, color: '#666' }}>
-                    提示：豆包图生图需要至少2张参考图片，请确保已上传原始图
+                    提示：豆包图生图支持1张或多张参考图片，请确保已上传原始图
                   </div>
                 </div>
 
@@ -1286,13 +1340,34 @@ export default function AlbumListPage() {
                     placeholder="输入风格描述（可选）"
                   />
                 </div>
+
+                <div style={{ marginBottom: 16 }}>
+                  <label style={{ display: 'block', marginBottom: 8 }}>
+                    排除结果图（exclude_result_image）：
+                    <Tooltip title="开启后，生图时将不参考 result_image，仅使用用户自拍图 + prompt 生成。默认关闭（即参考 result_image），保持历史版本兼容。">
+                      <span style={{ marginLeft: 4, color: '#1890ff', cursor: 'help' }}>❓</span>
+                    </Tooltip>
+                  </label>
+                  <Switch
+                    checked={editingAlbum.exclude_result_image === true}
+                    onChange={(checked) => {
+                      setEditingAlbum({ ...editingAlbum, exclude_result_image: checked })
+                    }}
+                  />
+                  <span style={{ marginLeft: 8, fontSize: 12, color: '#666' }}>
+                    {editingAlbum.exclude_result_image ? '不参考 result_image，仅使用用户自拍图 + prompt' : '参考 result_image（默认：用户自拍图 + result_image + prompt）'}
+                  </span>
+                  <div style={{ marginTop: 8, fontSize: 12, color: '#666' }}>
+                    提示：默认参考 result_image（用户自拍图 + result_image + prompt）。开启后仅使用用户自拍图 + prompt 生图，不参考 result_image。
+                  </div>
+                </div>
               </>
             )}
           </div>
         )}
       </Modal>
 
-      {/* 图片预览 Modal */}
+      {/* 图片/视频预览 Modal */}
       <Modal
         open={previewImage.visible}
         footer={null}
@@ -1302,21 +1377,35 @@ export default function AlbumListPage() {
         style={{ maxWidth: '90vw' }}
         bodyStyle={{ maxHeight: '90vh', overflow: 'auto', padding: '20px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}
       >
-        <img
-          src={previewImage.url}
-          alt="预览"
-          style={{ 
-            maxWidth: '100%', 
-            maxHeight: '80vh', 
-            height: 'auto',
-            width: 'auto',
-            display: 'block',
-            objectFit: 'contain'
-          }}
-          onError={(e) => {
-            ;(e.target as HTMLImageElement).src = 'https://via.placeholder.com/800'
-          }}
-        />
+        {previewImage.url && (previewImage.url.toLowerCase().endsWith('.mp4') || previewImage.url.toLowerCase().includes('video')) ? (
+          <video
+            src={previewImage.url}
+            controls
+            style={{ 
+              maxWidth: '100%', 
+              maxHeight: '80vh', 
+              height: 'auto',
+              width: 'auto',
+              display: 'block',
+            }}
+          />
+        ) : (
+          <img
+            src={previewImage.url}
+            alt="预览"
+            style={{ 
+              maxWidth: '100%', 
+              maxHeight: '80vh', 
+              height: 'auto',
+              width: 'auto',
+              display: 'block',
+              objectFit: 'contain'
+            }}
+            onError={(e) => {
+              ;(e.target as HTMLImageElement).src = 'https://via.placeholder.com/800'
+            }}
+          />
+        )}
       </Modal>
         </main>
       </div>

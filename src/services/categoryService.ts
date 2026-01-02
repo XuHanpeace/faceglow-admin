@@ -17,12 +17,13 @@ export interface CategoryConfigResponse {
 class CategoryService {
   /**
    * 获取Category配置列表（调用云函数）
+   * @param includeInactive 是否包含已下线的分类，默认为 true（admin 端永远需要所有数据）
    */
-  async getCategoryConfig(): Promise<CategoryConfigResponse> {
+  async getCategoryConfig(includeInactive: boolean = true): Promise<CategoryConfigResponse> {
     try {
       const response = await axios.post(
         `${CLOUD_FUNCTION_BASE_URL}/getCategoryConfig`,
-        {},
+        { data: { includeInactive } },
         {
           timeout: 30000,
           headers: {
