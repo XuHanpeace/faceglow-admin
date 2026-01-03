@@ -15,7 +15,7 @@ import {
   Switch,
   Tooltip,
 } from 'antd'
-import { UploadOutlined } from '@ant-design/icons'
+import { UploadOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons'
 import type { UploadFile } from 'antd/es/upload/interface'
 import { cosUploadService } from '../services/cosUpload'
 import { albumService } from '../services/albumService'
@@ -47,9 +47,12 @@ interface FormData {
   // 视频特效相关
   video_effect_template?: string
   // 图生视频相关
-  audio_url?: string
+  enable_custom_prompt?: boolean
+  custom_prompt?: string
+  custom_prompt_tips?: string
   // 豆包图生图相关
   exclude_result_image?: boolean
+  is_multi_person?: boolean
 }
 
 export default function BatchGeneratePage() {
@@ -76,14 +79,17 @@ export default function BatchGeneratePage() {
   const [coverImagePreview, setCoverImagePreview] = useState<string>('')
   const [previewVideoFile, setPreviewVideoFile] = useState<UploadFile | null>(null)
   const [previewVideoPreview, setPreviewVideoPreview] = useState<string>('')
-  const [srcImageFile, setSrcImageFile] = useState<UploadFile | null>(null)
-  const [srcImagePreview, setSrcImagePreview] = useState<string>('')
+  // src_images 动态列表：每个元素包含 file 和 preview
+  const [srcImageFiles, setSrcImageFiles] = useState<Array<{file: UploadFile | null, preview: string}>>([
+    { file: null, preview: '' }
+  ])
   const [uploading, setUploading] = useState(false)
   const [previewData, setPreviewData] = useState<Partial<AlbumRecord> | null>(null)
   const [uploadedUrls, setUploadedUrls] = useState<{
     album_image?: string
     result_image?: string
     src_image?: string
+    src_images?: string[]
     preview_video_url?: string
   }>({})
   
@@ -119,6 +125,13 @@ export default function BatchGeneratePage() {
     // 监听任务执行类型变化
     if (changedValues.task_execution_type !== undefined) {
       setTaskExecutionType(changedValues.task_execution_type)
+      // 图生视频：默认启用自定义提示词（enable_custom_prompt）
+      if (changedValues.task_execution_type === 'async_image_to_video') {
+        const currentEnable = allValues?.enable_custom_prompt
+        if (currentEnable === undefined) {
+          form.setFieldsValue({ enable_custom_prompt: true })
+        }
+      }
     }
     updatePreview()
   }
@@ -126,7 +139,7 @@ export default function BatchGeneratePage() {
   // 当图片文件或上传URL变化时更新预览
   useEffect(() => {
     updatePreview()
-  }, [coverImageFile, coverImagePreview, previewVideoFile, previewVideoPreview, srcImageFile, srcImagePreview, uploadedUrls])
+  }, [coverImageFile, coverImagePreview, previewVideoFile, previewVideoPreview, srcImageFiles, uploadedUrls])
 
   // 处理封面图上传（支持图片和视频）
   const handleCoverImageChange = (info: any) => {
@@ -172,26 +185,54 @@ export default function BatchGeneratePage() {
     }
   }
 
-  // 处理原始图上传
-  const handleSrcImageChange = (info: any) => {
+
+  // 处理原始图上传（动态索引）
+  const handleSrcImageChange = (index: number, info: any) => {
     const { file } = info
     if (file.status === 'removed' || !file) {
-      setSrcImageFile(null)
-      setSrcImagePreview('')
+      // 删除图片
+      setSrcImageFiles(prev => {
+        const newFiles = [...prev]
+        newFiles[index] = { file: null, preview: '' }
+        // 如果删除的不是最后一个，且最后一个为空，则移除最后一个
+        if (index === newFiles.length - 1 && index > 0 && !newFiles[index - 1].file) {
+          return newFiles.slice(0, index)
+        }
+        return newFiles
+      })
       return
     }
 
     const fileObj = file.originFileObj || file
     if (fileObj instanceof File) {
-      setSrcImageFile(file as UploadFile)
-      
       // 生成预览
       const reader = new FileReader()
       reader.onload = (e) => {
-        setSrcImagePreview(e.target?.result as string)
+        const preview = e.target?.result as string
+        setSrcImageFiles(prev => {
+          const newFiles = [...prev]
+          newFiles[index] = { file: file as UploadFile, preview }
+          // 如果当前是最后一个且有文件，自动添加一个新的空位
+          if (index === newFiles.length - 1 && preview) {
+            newFiles.push({ file: null, preview: '' })
+          }
+          return newFiles
+        })
       }
       reader.readAsDataURL(fileObj)
     }
+  }
+
+  // 删除指定索引的图片
+  const handleRemoveSrcImage = (index: number) => {
+    setSrcImageFiles(prev => {
+      const newFiles = prev.filter((_, i) => i !== index)
+      // 确保至少有一个空位
+      if (newFiles.length === 0) {
+        return [{ file: null, preview: '' }]
+      }
+      return newFiles
+    })
   }
 
   // 获取JSON预览数据
@@ -222,14 +263,19 @@ export default function BatchGeneratePage() {
         style_ref_url: formValues.style_ref_url,
         // 视频特效相关字段
         video_effect_template: formValues.video_effect_template,
-        // 图生视频相关字段
-        audio_url: formValues.audio_url,
+        // 图生视频相关字段（Seedance）
+        enable_custom_prompt: formValues.enable_custom_prompt,
+        custom_prompt: formValues.custom_prompt,
+        custom_prompt_tips: formValues.custom_prompt_tips,
         // 豆包图生图相关字段
         exclude_result_image: formValues.exclude_result_image,
+        is_multi_person: formValues.is_multi_person,
         // 图片URL：如果已上传则显示真实URL，否则显示待上传
         album_image: uploadedUrls.album_image || (coverImageFile ? '[待上传]' : ''),
         result_image: uploadedUrls.result_image || (coverImageFile ? '[待上传]' : ''),
-        src_image: uploadedUrls.src_image || (srcImageFile ? '[待上传]' : ''),
+        src_images: uploadedUrls.src_images || (srcImageFiles.some(item => item.file) ? srcImageFiles.map((item, idx) => item.file ? `[待上传${idx + 1}]` : '').filter(Boolean) : undefined),
+        // src_image 从 src_images[0] 自动填充（向后兼容）
+        src_image: uploadedUrls.src_image || (uploadedUrls.src_images?.[0] || (srcImageFiles[0]?.file ? '[待上传]' : '')),
         preview_video_url: uploadedUrls.preview_video_url || (previewVideoFile ? '[待上传]' : ''),
       }
     } catch (error) {
@@ -258,8 +304,16 @@ export default function BatchGeneratePage() {
         }
       }
 
-      if (!srcImageFile) {
-        message.warning('请上传原始图')
+      // 检查原始图上传（使用 src_images）
+      const uploadedSrcImages = srcImageFiles.filter(item => item.file)
+      if (uploadedSrcImages.length === 0) {
+        message.warning('请至少上传一张原始图')
+        return
+      }
+      const isMultiPerson = formValues.is_multi_person === true
+      if (isMultiPerson && uploadedSrcImages.length < 2) {
+        // 多人合拍模式：需要至少上传两张原始图
+        message.warning('多人合拍模式需要至少上传两张原始图')
         return
       }
 
@@ -322,13 +376,12 @@ export default function BatchGeneratePage() {
         }
 
         previewVideoUrl = videoUploadResult.url
-        albumImageUrl = previewVideoUrl // 视频类型：album_image 使用 preview_video_url 的值
+        // 视频类型：album_image 不再写 mp4（避免 App 把 mp4 当图片封面导致黑屏/播放异常）
+        // album_image 将在 src_image 上传完成后用首帧图 URL 回填
 
         // 更新预览数据中的URL
         setUploadedUrls({
           preview_video_url: previewVideoUrl,
-          album_image: albumImageUrl,
-          result_image: albumImageUrl,
         })
         updatePreview()
       } else {
@@ -360,26 +413,46 @@ export default function BatchGeneratePage() {
         updatePreview()
       }
 
-      // 2. 上传原始图到COS
-      const srcFile = srcImageFile.originFileObj || (srcImageFile as unknown as File)
-      if (!(srcFile instanceof File)) {
-        throw new Error('原始图文件格式错误')
-      }
-      const srcFileName = `album_src_${Date.now()}.${srcFile.name?.split('.').pop() || 'png'}`
-      const srcUploadResult = await cosUploadService.uploadFile({
-        file: srcFile,
-        fileName: srcFileName,
-        folder: 'albums',
-      })
+      // 2. 上传原始图到COS（使用 src_images）
+      let srcImageUrl = ''
+      let srcImagesUrls: string[] = []
 
-      if (!srcUploadResult.success || !srcUploadResult.url) {
-        throw new Error(`上传原始图失败: ${srcUploadResult.error}`)
+      // 上传所有选中的原始图
+      for (let i = 0; i < srcImageFiles.length; i++) {
+        const imageItem = srcImageFiles[i]
+        if (!imageItem.file) continue
+
+        const srcFile = imageItem.file.originFileObj || (imageItem.file as unknown as File)
+        if (!(srcFile instanceof File)) {
+          throw new Error(`原始图${i + 1}文件格式错误`)
+        }
+
+        const srcFileName = `album_src${i + 1}_${Date.now()}.${srcFile.name?.split('.').pop() || 'png'}`
+        const srcUploadResult = await cosUploadService.uploadFile({
+          file: srcFile,
+          fileName: srcFileName,
+          folder: 'albums',
+        })
+
+        if (!srcUploadResult.success || !srcUploadResult.url) {
+          throw new Error(`上传原始图${i + 1}失败: ${srcUploadResult.error}`)
+        }
+
+        srcImagesUrls.push(srcUploadResult.url)
+      }
+
+      // 使用第一张作为 src_image（向后兼容）
+      if (srcImagesUrls.length > 0) {
+        srcImageUrl = srcImagesUrls[0]
       }
 
       // 更新预览数据中的URL
       setUploadedUrls(prev => ({
         ...prev,
-        src_image: srcUploadResult.url,
+        src_image: srcImageUrl,
+        src_images: srcImagesUrls,
+        // 视频类型：用首帧图作为封面字段（album_image/result_image）
+        ...(isVideoType ? { album_image: srcImageUrl, result_image: srcImageUrl } : {}),
       }))
       updatePreview()
 
@@ -387,9 +460,11 @@ export default function BatchGeneratePage() {
       const albumData: Omit<AlbumRecord, 'album_id' | 'created_at' | 'updated_at'> = {
         album_name: formValues.album_name,
         album_description: formValues.album_description,
-        album_image: albumImageUrl, // 视频类型时使用 preview_video_url 的值，非视频类型使用封面图URL
-        result_image: albumImageUrl, // 封面图同时作为result_image
-        src_image: srcUploadResult.url,
+        // 封面字段：视频类型用首帧图（src_image），非视频类型用封面图
+        album_image: isVideoType ? srcImageUrl : albumImageUrl,
+        result_image: isVideoType ? srcImageUrl : albumImageUrl,
+        src_image: srcImageUrl,
+        src_images: srcImagesUrls,
         theme_styles: formValues.theme_styles || [],
         function_type: formValues.function_type,
         activity_tags: formValues.activity_tags || [],
@@ -406,12 +481,15 @@ export default function BatchGeneratePage() {
         style_ref_url: formValues.style_ref_url,
         // 视频特效相关字段
         video_effect_template: formValues.video_effect_template,
-        // 视频类型：preview_video_url 和 album_image 使用相同的值
+        // 视频类型：播放源始终使用 preview_video_url
         preview_video_url: isVideoType ? previewVideoUrl : undefined,
-        // 图生视频相关字段
-        audio_url: formValues.audio_url,
+        // 图生视频相关字段（Seedance）
+        enable_custom_prompt: formValues.enable_custom_prompt,
+        custom_prompt: formValues.custom_prompt,
+        custom_prompt_tips: formValues.custom_prompt_tips,
         // 豆包图生图相关字段
-        exclude_result_image: formValues.exclude_result_image || false,
+        exclude_result_image: formValues.exclude_result_image !== undefined ? formValues.exclude_result_image : true,
+        is_multi_person: formValues.is_multi_person || false,
       }
 
       await albumService.createAlbum(albumData)
@@ -422,8 +500,7 @@ export default function BatchGeneratePage() {
       form.resetFields()
       setCoverImageFile(null)
       setCoverImagePreview('')
-      setSrcImageFile(null)
-      setSrcImagePreview('')
+      setSrcImageFiles([{ file: null, preview: '' }])
       setUploadedUrls({})
     } catch (error: unknown) {
       console.error('上传或保存失败:', error)
@@ -628,30 +705,80 @@ export default function BatchGeneratePage() {
                         </Form.Item>
                       </Col>
                     )}
-                    <Col span={12}>
-                      <Form.Item label="原始图（src_image）" required>
-                        <Upload
-                          listType="picture-card"
-                          maxCount={1}
-                          beforeUpload={() => false}
-                          onChange={handleSrcImageChange}
-                          accept="image/*"
-                        >
-                          {srcImagePreview ? (
-                            <Image
-                              src={srcImagePreview}
-                              alt="原始图预览"
-                              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                              preview={false}
-                            />
-                          ) : (
-                            <div>
-                              <UploadOutlined />
-                              <div style={{ marginTop: 8 }}>上传原始图</div>
+                    <Col span={24}>
+                      <div style={{ marginBottom: 8 }}>
+                        <span style={{ color: '#ff4d4f' }}>*</span> 原始图（src_images）：
+                      </div>
+                      <Row gutter={16}>
+                        {srcImageFiles.map((item, index) => (
+                          <Col span={8} key={index} style={{ marginBottom: 16 }}>
+                            <div style={{ position: 'relative' }}>
+                              <Upload
+                                listType="picture-card"
+                                maxCount={1}
+                                beforeUpload={() => false}
+                                onChange={(info) => handleSrcImageChange(index, info)}
+                                accept="image/*"
+                                showUploadList={false}
+                              >
+                                {item.preview ? (
+                                  <Image
+                                    src={item.preview}
+                                    alt={`原始图${index + 1}预览`}
+                                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                    preview={false}
+                                  />
+                                ) : (
+                                  <div>
+                                    <UploadOutlined />
+                                    <div style={{ marginTop: 8 }}>上传原始图{index + 1}</div>
+                                  </div>
+                                )}
+                              </Upload>
+                              {item.file && (
+                                <Button
+                                  type="text"
+                                  danger
+                                  icon={<DeleteOutlined />}
+                                  size="small"
+                                  style={{
+                                    position: 'absolute',
+                                    top: -8,
+                                    right: -8,
+                                    zIndex: 10,
+                                    backgroundColor: '#fff',
+                                    boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+                                  }}
+                                  onClick={() => handleRemoveSrcImage(index)}
+                                />
+                              )}
                             </div>
-                          )}
-                        </Upload>
-                      </Form.Item>
+                          </Col>
+                        ))}
+                        {srcImageFiles[srcImageFiles.length - 1]?.file && (
+                          <Col span={8} style={{ marginBottom: 16 }}>
+                            <div
+                              style={{
+                                width: '100%',
+                                height: 104,
+                                border: '1px dashed #d9d9d9',
+                                borderRadius: 8,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                cursor: 'pointer',
+                                backgroundColor: '#fafafa'
+                              }}
+                              onClick={() => setSrcImageFiles(prev => [...prev, { file: null, preview: '' }])}
+                            >
+                              <div style={{ textAlign: 'center' }}>
+                                <PlusOutlined style={{ fontSize: 24, color: '#999' }} />
+                                <div style={{ marginTop: 8, color: '#999' }}>添加图片</div>
+                              </div>
+                            </div>
+                          </Col>
+                        )}
+                      </Row>
                     </Col>
                   </Row>
 
@@ -766,12 +893,46 @@ export default function BatchGeneratePage() {
                   {/* 图生视频配置 */}
                   {taskExecutionType === 'async_image_to_video' && (
                     <>
-                      <Form.Item 
-                        name="audio_url" 
-                        label="音频URL（audio_url，可选）"
-                        tooltip="图生视频音频URL，仅wan2.5-i2v-preview支持"
+                      <Form.Item
+                        name="enable_custom_prompt"
+                        label="支持自定义提示词（enable_custom_prompt）"
+                        valuePropName="checked"
+                        initialValue={true}
+                        tooltip="默认为开启：App 端 BeforeCreation 会展示输入框，用户可手动输入想说的话（custom_prompt）"
                       >
-                        <Input placeholder="输入音频URL（可选）" />
+                        <Switch />
+                      </Form.Item>
+
+                      <Form.Item
+                        noStyle
+                        shouldUpdate={(prevValues: Record<string, unknown>, currentValues: Record<string, unknown>) =>
+                          prevValues?.enable_custom_prompt !== currentValues?.enable_custom_prompt
+                        }
+                      >
+                        {({ getFieldValue }) => {
+                          const enabled = !!getFieldValue('enable_custom_prompt')
+                          if (!enabled) return null
+
+                          return (
+                            <>
+                              <Form.Item
+                                name="custom_prompt"
+                                label="默认自定义提示词（custom_prompt，可选）"
+                                tooltip="可为空；若填写，App 输入框会默认填入该值，用户可修改"
+                              >
+                                <TextArea rows={2} placeholder="例如：镜头缓缓拉近，轻柔微风声..." />
+                              </Form.Item>
+
+                              <Form.Item
+                                name="custom_prompt_tips"
+                                label="小贴士（custom_prompt_tips，可选）"
+                                tooltip="会在 App 端输入框附近展示为小贴士（仅 enable_custom_prompt=true 时展示）"
+                              >
+                                <TextArea rows={2} placeholder="例如：可以写你想表达的话、镜头运动、氛围音效等" />
+                              </Form.Item>
+                            </>
+                          )
+                        }}
                       </Form.Item>
                       <Divider />
                     </>
@@ -785,7 +946,51 @@ export default function BatchGeneratePage() {
                         label={
                           <span>
                             排除结果图（exclude_result_image）：
-                            <Tooltip title="开启后，生图时将不参考 result_image，仅使用用户自拍图 + prompt 生成。默认关闭（即参考 result_image），保持历史版本兼容。">
+                            <Tooltip title="开启后，生图时将不参考 result_image，仅使用用户自拍图 + prompt 生成。默认开启（即不参考 result_image）。图片数组顺序：result_image 在首位，后续为用户自拍。">
+                              <span style={{ marginLeft: 4, color: '#1890ff', cursor: 'help' }}>❓</span>
+                            </Tooltip>
+                          </span>
+                        }
+                        valuePropName="checked"
+                        initialValue={true}
+                      >
+                        <Switch />
+                      </Form.Item>
+                      <Form.Item
+                        noStyle
+                        shouldUpdate={(prevValues: Record<string, any>, currentValues: Record<string, any>) => 
+                          prevValues?.exclude_result_image !== currentValues?.exclude_result_image ||
+                          prevValues?.is_multi_person !== currentValues?.is_multi_person
+                        }
+                      >
+                        {({ getFieldValue }) => {
+                          const excludeResultImage = getFieldValue('exclude_result_image')
+                          const isMultiPerson = getFieldValue('is_multi_person')
+                          // 根据状态动态生成数组格式
+                          const arrayFormat = excludeResultImage
+                            ? (isMultiPerson ? '[selfie1, selfie2]' : '[selfie1]')
+                            : (isMultiPerson ? '[result_image, selfie1, selfie2]' : '[result_image, selfie1]')
+                          return (
+                            <div style={{ marginBottom: 16, marginTop: -16 }}>
+                              <span style={{ fontSize: 12, color: '#666', marginLeft: 24 }}>
+                                {excludeResultImage 
+                                  ? '不参考 result_image，仅使用用户自拍图 + prompt' 
+                                  : '参考 result_image，使用 result_image + 用户自拍图 + prompt'}
+                              </span>
+                              <div style={{ marginTop: 8, fontSize: 12, color: '#666', marginLeft: 24 }}>
+                                提示：当前配置的图片数组顺序为 <strong>{arrayFormat}</strong> + prompt
+                              </div>
+                            </div>
+                          )
+                        }}
+                      </Form.Item>
+
+                      <Form.Item 
+                        name="is_multi_person" 
+                        label={
+                          <span>
+                            多人合拍模式（is_multi_person）：
+                            <Tooltip title="开启后，强制要求用户上传2张自拍。默认关闭（即单人模式，只需1张自拍）。">
                               <span style={{ marginLeft: 4, color: '#1890ff', cursor: 'help' }}>❓</span>
                             </Tooltip>
                           </span>
@@ -798,20 +1003,24 @@ export default function BatchGeneratePage() {
                       <Form.Item
                         noStyle
                         shouldUpdate={(prevValues: Record<string, any>, currentValues: Record<string, any>) => 
+                          prevValues?.is_multi_person !== currentValues?.is_multi_person ||
                           prevValues?.exclude_result_image !== currentValues?.exclude_result_image
                         }
                       >
                         {({ getFieldValue }) => {
+                          const isMultiPerson = getFieldValue('is_multi_person')
                           const excludeResultImage = getFieldValue('exclude_result_image')
+                          // 根据状态动态生成数组格式
+                          const arrayFormat = excludeResultImage
+                            ? (isMultiPerson ? '[selfie1, selfie2]' : '[selfie1]')
+                            : (isMultiPerson ? '[result_image, selfie1, selfie2]' : '[result_image, selfie1]')
                           return (
                             <div style={{ marginBottom: 16, marginTop: -16 }}>
                               <span style={{ fontSize: 12, color: '#666', marginLeft: 24 }}>
-                                {excludeResultImage 
-                                  ? '不参考 result_image，仅使用用户自拍图 + prompt' 
-                                  : '参考 result_image（默认：用户自拍图 + result_image + prompt）'}
+                                {isMultiPerson ? '多人合拍模式（需要2张自拍）' : '单人模式（默认：只需1张自拍）'}
                               </span>
                               <div style={{ marginTop: 8, fontSize: 12, color: '#666', marginLeft: 24 }}>
-                                提示：默认参考 result_image（用户自拍图 + result_image + prompt）。开启后仅使用用户自拍图 + prompt 生图，不参考 result_image。
+                                提示：开启后，用户在创作时需要选择2张自拍。当前配置的图片数组顺序为 <strong>{arrayFormat}</strong> + prompt
                               </div>
                             </div>
                           )

@@ -58,14 +58,16 @@ export interface AlbumRecord {
   activity_tag_text?: string
   template_list?: any[]
   src_image?: string
+  src_images?: string[] // 源图片URL数组（多人合拍模式使用，保留 src_image 作为向后兼容）
   result_image?: string
   prompt_text?: string
   style_description?: string
   likes: number
   sort_weight: number
   preview_video_url?: string
-  allow_custom_prompt?: boolean
-  custom_prompt_placeholder?: string
+  enable_custom_prompt?: boolean
+  custom_prompt?: string
+  custom_prompt_tips?: string
   audio_url?: string
   video_effect_template?: string
   // 人像风格重绘相关字段
@@ -73,6 +75,7 @@ export interface AlbumRecord {
   style_ref_url?: string // 风格参考图URL（当style_index=-1时使用）
   // 豆包图生图相关字段
   exclude_result_image?: boolean // 是否排除 result_image（默认 false，即包含 result_image，保持历史版本兼容）
+  is_multi_person?: boolean // 是否为多人合拍模式（默认 false，即单人模式。当为 true 时，强制要求用户上传2张自拍）
   // 发布状态
   published?: boolean
   created_at?: string

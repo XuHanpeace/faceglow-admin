@@ -41,6 +41,12 @@ export default function AlbumListPage() {
   const [uploadingResultImage, setUploadingResultImage] = useState(false)
   const [srcImageFile, setSrcImageFile] = useState<UploadFile | null>(null)
   const [srcImagePreview, setSrcImagePreview] = useState<string>('')
+  const [srcImage1File, setSrcImage1File] = useState<UploadFile | null>(null)
+  const [srcImage1Preview, setSrcImage1Preview] = useState<string>('')
+  const [srcImage2File, setSrcImage2File] = useState<UploadFile | null>(null)
+  const [srcImage2Preview, setSrcImage2Preview] = useState<string>('')
+  const [uploadingSrcImage1, setUploadingSrcImage1] = useState(false)
+  const [uploadingSrcImage2, setUploadingSrcImage2] = useState(false)
   const [resultImageFile, setResultImageFile] = useState<UploadFile | null>(null)
   const [resultImagePreview, setResultImagePreview] = useState<string>('')
   const [editingWeightId, setEditingWeightId] = useState<string | null>(null)
@@ -116,9 +122,18 @@ export default function AlbumListPage() {
 
   // 打开编辑Modal
   const handleEdit = (album: AlbumRecord) => {
-    setEditingAlbum({ ...album })
+    const nextAlbum: AlbumRecord = { ...album }
+    // 图生视频：默认启用自定义提示词
+    if (nextAlbum.task_execution_type === 'async_image_to_video' && nextAlbum.enable_custom_prompt === undefined) {
+      nextAlbum.enable_custom_prompt = true
+    }
+    setEditingAlbum(nextAlbum)
     setSrcImageFile(null)
     setSrcImagePreview('')
+    setSrcImage1File(null)
+    setSrcImage1Preview('')
+    setSrcImage2File(null)
+    setSrcImage2Preview('')
     setResultImageFile(null)
     setResultImagePreview('')
     setEditModalVisible(true)
@@ -168,6 +183,110 @@ export default function AlbumListPage() {
         message.error(error.message || '上传失败')
       } finally {
         setUploadingSrcImage(false)
+      }
+    }
+  }
+
+  // 处理多人合拍原始图1上传（src_images[0]）
+  const handleSrcImage1Change = async (info: any) => {
+    const { file } = info
+    if (file.status === 'removed' || !file) {
+      setSrcImage1File(null)
+      setSrcImage1Preview('')
+      if (editingAlbum) {
+        const srcImages = editingAlbum.src_images || []
+        srcImages[0] = ''
+        setEditingAlbum({ ...editingAlbum, src_images: srcImages })
+      }
+      return
+    }
+
+    const fileObj = file.originFileObj || file
+    if (fileObj instanceof File) {
+      setSrcImage1File(file as UploadFile)
+      
+      // 生成预览
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        setSrcImage1Preview(e.target?.result as string)
+      }
+      reader.readAsDataURL(fileObj)
+
+      // 上传图片
+      try {
+        setUploadingSrcImage1(true)
+        const fileName = `album_src1_${Date.now()}.${fileObj.name?.split('.').pop() || 'png'}`
+        const result = await cosUploadService.uploadFile({
+          file: fileObj,
+          fileName,
+          folder: 'albums',
+        })
+
+        if (result.success && result.url && editingAlbum) {
+          const srcImages = editingAlbum.src_images || []
+          srcImages[0] = result.url
+          setEditingAlbum({ ...editingAlbum, src_images: srcImages })
+          message.success('原始图1上传成功')
+        } else {
+          message.error(result.error || '上传失败')
+        }
+      } catch (error: any) {
+        console.error('上传原始图1失败:', error)
+        message.error(error.message || '上传失败')
+      } finally {
+        setUploadingSrcImage1(false)
+      }
+    }
+  }
+
+  // 处理多人合拍原始图2上传（src_images[1]）
+  const handleSrcImage2Change = async (info: any) => {
+    const { file } = info
+    if (file.status === 'removed' || !file) {
+      setSrcImage2File(null)
+      setSrcImage2Preview('')
+      if (editingAlbum) {
+        const srcImages = editingAlbum.src_images || []
+        srcImages[1] = ''
+        setEditingAlbum({ ...editingAlbum, src_images: srcImages })
+      }
+      return
+    }
+
+    const fileObj = file.originFileObj || file
+    if (fileObj instanceof File) {
+      setSrcImage2File(file as UploadFile)
+      
+      // 生成预览
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        setSrcImage2Preview(e.target?.result as string)
+      }
+      reader.readAsDataURL(fileObj)
+
+      // 上传图片
+      try {
+        setUploadingSrcImage2(true)
+        const fileName = `album_src2_${Date.now()}.${fileObj.name?.split('.').pop() || 'png'}`
+        const result = await cosUploadService.uploadFile({
+          file: fileObj,
+          fileName,
+          folder: 'albums',
+        })
+
+        if (result.success && result.url && editingAlbum) {
+          const srcImages = editingAlbum.src_images || []
+          srcImages[1] = result.url
+          setEditingAlbum({ ...editingAlbum, src_images: srcImages })
+          message.success('原始图2上传成功')
+        } else {
+          message.error(result.error || '上传失败')
+        }
+      } catch (error: any) {
+        console.error('上传原始图2失败:', error)
+        message.error(error.message || '上传失败')
+      } finally {
+        setUploadingSrcImage2(false)
       }
     }
   }
@@ -266,8 +385,14 @@ export default function AlbumListPage() {
         if (editingAlbum.prompt_text !== undefined) {
           updates.prompt_text = editingAlbum.prompt_text
         }
-        if (editingAlbum.audio_url !== undefined) {
-          updates.audio_url = editingAlbum.audio_url
+        if (editingAlbum.enable_custom_prompt !== undefined) {
+          updates.enable_custom_prompt = editingAlbum.enable_custom_prompt
+        }
+        if (editingAlbum.custom_prompt !== undefined) {
+          updates.custom_prompt = editingAlbum.custom_prompt
+        }
+        if (editingAlbum.custom_prompt_tips !== undefined) {
+          updates.custom_prompt_tips = editingAlbum.custom_prompt_tips
         }
       }
 
@@ -305,8 +430,12 @@ export default function AlbumListPage() {
 
       // 异步任务 - 豆包图生图
       if (taskType === 'async_doubao_image_to_image') {
-        if (editingAlbum.src_image) {
-          updates.src_image = editingAlbum.src_image
+        if (editingAlbum.src_images !== undefined) {
+          updates.src_images = editingAlbum.src_images
+          // 自动将 src_images[0] 填充到 src_image（向后兼容）
+          if (editingAlbum.src_images && editingAlbum.src_images.length > 0 && editingAlbum.src_images[0]) {
+            updates.src_image = editingAlbum.src_images[0]
+          }
         }
         if (editingAlbum.result_image) {
           updates.result_image = editingAlbum.result_image
@@ -319,6 +448,9 @@ export default function AlbumListPage() {
         }
         if (editingAlbum.exclude_result_image !== undefined) {
           updates.exclude_result_image = editingAlbum.exclude_result_image
+        }
+        if (editingAlbum.is_multi_person !== undefined) {
+          updates.is_multi_person = editingAlbum.is_multi_person
         }
       }
 
@@ -693,7 +825,11 @@ export default function AlbumListPage() {
               <Select
                 value={editingAlbum.task_execution_type}
                 onChange={(value) => {
-                  setEditingAlbum({ ...editingAlbum, task_execution_type: value })
+                  const nextAlbum: AlbumRecord = { ...editingAlbum, task_execution_type: value }
+                  if (value === 'async_image_to_video' && nextAlbum.enable_custom_prompt === undefined) {
+                    nextAlbum.enable_custom_prompt = true
+                  }
+                  setEditingAlbum(nextAlbum)
                 }}
                 style={{ width: '100%' }}
                 placeholder="选择模型"
@@ -1077,16 +1213,47 @@ export default function AlbumListPage() {
                 </div>
 
                 <div style={{ marginBottom: 16 }}>
-                  <label style={{ display: 'block', marginBottom: 8 }}>音频URL（audio_url，可选）：</label>
-                  <Input
-                    value={editingAlbum.audio_url || ''}
-                    onChange={(e) => {
-                      setEditingAlbum({ ...editingAlbum, audio_url: e.target.value })
+                  <label style={{ display: 'block', marginBottom: 8 }}>
+                    支持自定义提示词（enable_custom_prompt）：
+                  </label>
+                  <Switch
+                    checked={editingAlbum.enable_custom_prompt !== false}
+                    onChange={(checked) => {
+                      setEditingAlbum({ ...editingAlbum, enable_custom_prompt: checked })
                     }}
-                    placeholder="输入音频URL（可选，仅wan2.5-i2v-preview支持）"
-                    allowClear
                   />
+                  <div style={{ marginTop: 8, fontSize: 12, color: '#666' }}>
+                    默认开启：App 端会展示输入框，用户可手动输入想说的话（custom_prompt）
+                  </div>
                 </div>
+
+                {editingAlbum.enable_custom_prompt !== false && (
+                  <>
+                    <div style={{ marginBottom: 16 }}>
+                      <label style={{ display: 'block', marginBottom: 8 }}>默认自定义提示词（custom_prompt，可选）：</label>
+                      <TextArea
+                        value={editingAlbum.custom_prompt || ''}
+                        onChange={(e) => {
+                          setEditingAlbum({ ...editingAlbum, custom_prompt: e.target.value })
+                        }}
+                        rows={2}
+                        placeholder="可为空；若填写，App 输入框默认填入该值"
+                      />
+                    </div>
+
+                    <div style={{ marginBottom: 16 }}>
+                      <label style={{ display: 'block', marginBottom: 8 }}>小贴士（custom_prompt_tips，可选）：</label>
+                      <TextArea
+                        value={editingAlbum.custom_prompt_tips || ''}
+                        onChange={(e) => {
+                          setEditingAlbum({ ...editingAlbum, custom_prompt_tips: e.target.value })
+                        }}
+                        rows={2}
+                        placeholder="会在 App 输入框附近展示为小贴士"
+                      />
+                    </div>
+                  </>
+                )}
 
                 <div style={{ marginBottom: 16 }}>
                   <label style={{ display: 'block', marginBottom: 8 }}>预览视频URL（preview_video_url）：</label>
@@ -1241,29 +1408,30 @@ export default function AlbumListPage() {
                   </div>
                 </div>
 
+                {/* 原始图上传组件（使用 src_images） */}
                 <div style={{ marginBottom: 16 }}>
-                  <label style={{ display: 'block', marginBottom: 8 }}>原始图（src_image）：</label>
+                  <label style={{ display: 'block', marginBottom: 8 }}>原始图1（src_images[0]）：</label>
                   <Row gutter={16}>
                     <Col span={12}>
                       <Upload
                         listType="picture-card"
                         maxCount={1}
                         beforeUpload={() => false}
-                        onChange={handleSrcImageChange}
+                        onChange={handleSrcImage1Change}
                         accept="image/*"
                         showUploadList={false}
                       >
-                        {(srcImagePreview || editingAlbum.src_image) ? (
+                        {(srcImage1Preview || editingAlbum.src_images?.[0]) ? (
                           <Image
-                            src={srcImagePreview || editingAlbum.src_image}
-                            alt="原始图"
+                            src={srcImage1Preview || editingAlbum.src_images?.[0]}
+                            alt="原始图1"
                             style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                             preview={false}
                           />
                         ) : (
                           <div>
                             <UploadOutlined />
-                            <div style={{ marginTop: 8 }}>上传原始图</div>
+                            <div style={{ marginTop: 8 }}>上传原始图1</div>
                           </div>
                         )}
                       </Upload>
@@ -1272,11 +1440,13 @@ export default function AlbumListPage() {
                       <div>
                         <div style={{ marginBottom: 8, fontSize: 12, color: '#666' }}>图片URL：</div>
                         <Input
-                          value={editingAlbum.src_image || ''}
+                          value={editingAlbum.src_images?.[0] || ''}
                           onChange={(e) => {
-                            setEditingAlbum({ ...editingAlbum, src_image: e.target.value })
+                            const srcImages = editingAlbum.src_images || []
+                            srcImages[0] = e.target.value
+                            setEditingAlbum({ ...editingAlbum, src_images: srcImages })
                           }}
-                          placeholder="输入或上传原始图URL"
+                          placeholder="输入或上传原始图1 URL"
                           style={{ fontSize: 12 }}
                           allowClear
                         />
@@ -1284,6 +1454,103 @@ export default function AlbumListPage() {
                     </Col>
                   </Row>
                 </div>
+
+                {/* 多人合拍模式：显示第二个原始图上传组件 */}
+                {editingAlbum.is_multi_person === true && (
+                  <>
+                    <div style={{ marginBottom: 16 }}>
+                      <label style={{ display: 'block', marginBottom: 8 }}>原始图1（src_images[0]）：</label>
+                      <Row gutter={16}>
+                        <Col span={12}>
+                          <Upload
+                            listType="picture-card"
+                            maxCount={1}
+                            beforeUpload={() => false}
+                            onChange={handleSrcImage1Change}
+                            accept="image/*"
+                            showUploadList={false}
+                          >
+                            {(srcImage1Preview || editingAlbum.src_images?.[0]) ? (
+                              <Image
+                                src={srcImage1Preview || editingAlbum.src_images?.[0]}
+                                alt="原始图1"
+                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                preview={false}
+                              />
+                            ) : (
+                              <div>
+                                <UploadOutlined />
+                                <div style={{ marginTop: 8 }}>上传原始图1</div>
+                              </div>
+                            )}
+                          </Upload>
+                        </Col>
+                        <Col span={12}>
+                          <div>
+                            <div style={{ marginBottom: 8, fontSize: 12, color: '#666' }}>图片URL：</div>
+                            <Input
+                              value={editingAlbum.src_images?.[0] || ''}
+                              onChange={(e) => {
+                                const srcImages = editingAlbum.src_images || []
+                                srcImages[0] = e.target.value
+                                setEditingAlbum({ ...editingAlbum, src_images: srcImages })
+                              }}
+                              placeholder="输入或上传原始图1 URL"
+                              style={{ fontSize: 12 }}
+                              allowClear
+                            />
+                          </div>
+                        </Col>
+                      </Row>
+                    </div>
+
+                    <div style={{ marginBottom: 16 }}>
+                      <label style={{ display: 'block', marginBottom: 8 }}>原始图2（src_images[1]）：</label>
+                      <Row gutter={16}>
+                        <Col span={12}>
+                          <Upload
+                            listType="picture-card"
+                            maxCount={1}
+                            beforeUpload={() => false}
+                            onChange={handleSrcImage2Change}
+                            accept="image/*"
+                            showUploadList={false}
+                          >
+                            {(srcImage2Preview || editingAlbum.src_images?.[1]) ? (
+                              <Image
+                                src={srcImage2Preview || editingAlbum.src_images?.[1]}
+                                alt="原始图2"
+                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                preview={false}
+                              />
+                            ) : (
+                              <div>
+                                <UploadOutlined />
+                                <div style={{ marginTop: 8 }}>上传原始图2</div>
+                              </div>
+                            )}
+                          </Upload>
+                        </Col>
+                        <Col span={12}>
+                          <div>
+                            <div style={{ marginBottom: 8, fontSize: 12, color: '#666' }}>图片URL：</div>
+                            <Input
+                              value={editingAlbum.src_images?.[1] || ''}
+                              onChange={(e) => {
+                                const srcImages = editingAlbum.src_images || []
+                                srcImages[1] = e.target.value
+                                setEditingAlbum({ ...editingAlbum, src_images: srcImages })
+                              }}
+                              placeholder="输入或上传原始图2 URL"
+                              style={{ fontSize: 12 }}
+                              allowClear
+                            />
+                          </div>
+                        </Col>
+                      </Row>
+                    </div>
+                  </>
+                )}
 
                 <div style={{ marginBottom: 16 }}>
                   <label style={{ display: 'block', marginBottom: 8 }}>结果图（result_image）：</label>
@@ -1344,21 +1611,52 @@ export default function AlbumListPage() {
                 <div style={{ marginBottom: 16 }}>
                   <label style={{ display: 'block', marginBottom: 8 }}>
                     排除结果图（exclude_result_image）：
-                    <Tooltip title="开启后，生图时将不参考 result_image，仅使用用户自拍图 + prompt 生成。默认关闭（即参考 result_image），保持历史版本兼容。">
+                    <Tooltip title="开启后，生图时将不参考 result_image，仅使用用户自拍图 + prompt 生成。默认开启（即不参考 result_image）。图片数组顺序：result_image 在首位，后续为用户自拍。">
                       <span style={{ marginLeft: 4, color: '#1890ff', cursor: 'help' }}>❓</span>
                     </Tooltip>
                   </label>
                   <Switch
-                    checked={editingAlbum.exclude_result_image === true}
+                    checked={editingAlbum.exclude_result_image !== false}
                     onChange={(checked) => {
                       setEditingAlbum({ ...editingAlbum, exclude_result_image: checked })
                     }}
                   />
                   <span style={{ marginLeft: 8, fontSize: 12, color: '#666' }}>
-                    {editingAlbum.exclude_result_image ? '不参考 result_image，仅使用用户自拍图 + prompt' : '参考 result_image（默认：用户自拍图 + result_image + prompt）'}
+                    {editingAlbum.exclude_result_image !== false 
+                      ? '不参考 result_image，仅使用用户自拍图 + prompt' 
+                      : '参考 result_image，使用 result_image + 用户自拍图 + prompt'}
                   </span>
                   <div style={{ marginTop: 8, fontSize: 12, color: '#666' }}>
-                    提示：默认参考 result_image（用户自拍图 + result_image + prompt）。开启后仅使用用户自拍图 + prompt 生图，不参考 result_image。
+                    提示：当前配置的图片数组顺序为 <strong>{
+                      editingAlbum.exclude_result_image !== false
+                        ? (editingAlbum.is_multi_person === true ? '[selfie1, selfie2]' : '[selfie1]')
+                        : (editingAlbum.is_multi_person === true ? '[result_image, selfie1, selfie2]' : '[result_image, selfie1]')
+                    }</strong> + prompt
+                  </div>
+                </div>
+
+                <div style={{ marginBottom: 16 }}>
+                  <label style={{ display: 'block', marginBottom: 8 }}>
+                    多人合拍模式（is_multi_person）：
+                    <Tooltip title="开启后，强制要求用户上传2张自拍。默认关闭（即单人模式，只需1张自拍）。">
+                      <span style={{ marginLeft: 4, color: '#1890ff', cursor: 'help' }}>❓</span>
+                    </Tooltip>
+                  </label>
+                  <Switch
+                    checked={editingAlbum.is_multi_person === true}
+                    onChange={(checked) => {
+                      setEditingAlbum({ ...editingAlbum, is_multi_person: checked })
+                    }}
+                  />
+                  <span style={{ marginLeft: 8, fontSize: 12, color: '#666' }}>
+                    {editingAlbum.is_multi_person === true ? '多人合拍模式（需要2张自拍）' : '单人模式（默认：只需1张自拍）'}
+                  </span>
+                  <div style={{ marginTop: 8, fontSize: 12, color: '#666' }}>
+                    提示：开启后，用户在创作时需要选择2张自拍。当前配置的图片数组顺序为 <strong>{
+                      editingAlbum.exclude_result_image !== false
+                        ? (editingAlbum.is_multi_person === true ? '[selfie1, selfie2]' : '[selfie1]')
+                        : (editingAlbum.is_multi_person === true ? '[result_image, selfie1, selfie2]' : '[result_image, selfie1]')
+                    }</strong> + prompt
                   </div>
                 </div>
               </>
