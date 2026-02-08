@@ -127,6 +127,10 @@ export default function AlbumListPage() {
     if (nextAlbum.task_execution_type === 'async_image_to_video' && nextAlbum.enable_custom_prompt === undefined) {
       nextAlbum.enable_custom_prompt = true
     }
+    // 豆包图生图：如果 enable_custom_prompt 是 undefined 或 null，默认设置为 true（因为 Switch 的 checked 逻辑是 !== false）
+    if (nextAlbum.task_execution_type === 'async_doubao_image_to_image' && (nextAlbum.enable_custom_prompt === undefined || nextAlbum.enable_custom_prompt === null)) {
+      nextAlbum.enable_custom_prompt = true
+    }
     setEditingAlbum(nextAlbum)
     setSrcImageFile(null)
     setSrcImagePreview('')
@@ -346,6 +350,7 @@ export default function AlbumListPage() {
     try {
       // 构建更新数据
       const updates: Partial<AlbumRecord> = {
+        album_name: editingAlbum.album_name,
         function_type: editingAlbum.function_type,
         task_execution_type: editingAlbum.task_execution_type,
         theme_styles: editingAlbum.theme_styles,
@@ -445,6 +450,19 @@ export default function AlbumListPage() {
         }
         if (editingAlbum.style_description !== undefined) {
           updates.style_description = editingAlbum.style_description
+        }
+        // enable_custom_prompt 必须明确保存，即使是 false 也要保存
+        if (editingAlbum.enable_custom_prompt !== undefined && editingAlbum.enable_custom_prompt !== null) {
+          updates.enable_custom_prompt = editingAlbum.enable_custom_prompt
+        } else {
+          // 如果未设置，根据 Switch 的默认行为（!== false 为 true），保存为 true
+          updates.enable_custom_prompt = true
+        }
+        if (editingAlbum.custom_prompt !== undefined) {
+          updates.custom_prompt = editingAlbum.custom_prompt
+        }
+        if (editingAlbum.custom_prompt_tips !== undefined) {
+          updates.custom_prompt_tips = editingAlbum.custom_prompt_tips
         }
         if (editingAlbum.exclude_result_image !== undefined) {
           updates.exclude_result_image = editingAlbum.exclude_result_image
@@ -794,93 +812,109 @@ export default function AlbumListPage() {
           <div style={{ padding: '20px 0', maxHeight: '70vh', overflowY: 'auto' }}>
             <div style={{ marginBottom: 16 }}>
               <label style={{ display: 'block', marginBottom: 8 }}>相册名称：</label>
-              <Input value={editingAlbum.album_name} disabled />
+              <Input 
+                value={editingAlbum.album_name} 
+                onChange={(e) => {
+                  setEditingAlbum({ ...editingAlbum, album_name: e.target.value })
+                }}
+                placeholder="输入相册名称"
+              />
             </div>
 
-            <div style={{ marginBottom: 16 }}>
-              <label style={{ display: 'block', marginBottom: 8 }}>功能类型：</label>
-              <Select
-                value={editingAlbum.function_type}
-                onChange={(value) => {
-                  setEditingAlbum({ ...editingAlbum, function_type: value })
-                }}
-                style={{ width: '100%' }}
-                placeholder="选择功能类型"
-              >
-                {functionTypeOptions.map((option) => (
-                  <Option key={option.value} value={option.value}>
-                    {option.label}
-                  </Option>
-                ))}
-              </Select>
-            </div>
-
-            <div style={{ marginBottom: 16 }}>
-              <label style={{ display: 'block', marginBottom: 8 }}>
-                选择模型：
-                <Tooltip title="选择模型，决定调用哪个云函数以及需要填写哪些参数">
-                  <span style={{ marginLeft: 4, color: '#1890ff', cursor: 'help' }}>❓</span>
-                </Tooltip>
-              </label>
-              <Select
-                value={editingAlbum.task_execution_type}
-                onChange={(value) => {
-                  const nextAlbum: AlbumRecord = { ...editingAlbum, task_execution_type: value }
-                  if (value === 'async_image_to_video' && nextAlbum.enable_custom_prompt === undefined) {
-                    nextAlbum.enable_custom_prompt = true
-                  }
-                  setEditingAlbum(nextAlbum)
-                }}
-                style={{ width: '100%' }}
-                placeholder="选择模型"
-              >
-                {taskExecutionTypeOptions.map((option) => (
-                  <Option key={option.value} value={option.value}>
-                    {option.label}
-                  </Option>
-                ))}
-              </Select>
-            </div>
+            <Row gutter={16}>
+              <Col span={12}>
+                <div style={{ marginBottom: 16 }}>
+                  <label style={{ display: 'block', marginBottom: 8 }}>功能类型：</label>
+                  <Select
+                    value={editingAlbum.function_type}
+                    onChange={(value) => {
+                      setEditingAlbum({ ...editingAlbum, function_type: value })
+                    }}
+                    style={{ width: '100%' }}
+                    placeholder="选择功能类型"
+                  >
+                    {functionTypeOptions.map((option) => (
+                      <Option key={option.value} value={option.value}>
+                        {option.label}
+                      </Option>
+                    ))}
+                  </Select>
+                </div>
+              </Col>
+              <Col span={12}>
+                <div style={{ marginBottom: 16 }}>
+                  <label style={{ display: 'block', marginBottom: 8 }}>
+                    选择模型：
+                    <Tooltip title="选择模型，决定调用哪个云函数以及需要填写哪些参数">
+                      <span style={{ marginLeft: 4, color: '#1890ff', cursor: 'help' }}>❓</span>
+                    </Tooltip>
+                  </label>
+                  <Select
+                    value={editingAlbum.task_execution_type}
+                    onChange={(value) => {
+                      const nextAlbum: AlbumRecord = { ...editingAlbum, task_execution_type: value }
+                      if (value === 'async_image_to_video' && nextAlbum.enable_custom_prompt === undefined) {
+                        nextAlbum.enable_custom_prompt = true
+                      }
+                      setEditingAlbum(nextAlbum)
+                    }}
+                    style={{ width: '100%' }}
+                    placeholder="选择模型"
+                  >
+                    {taskExecutionTypeOptions.map((option) => (
+                      <Option key={option.value} value={option.value}>
+                        {option.label}
+                      </Option>
+                    ))}
+                  </Select>
+                </div>
+              </Col>
+            </Row>
 
             <Divider />
 
-            <div style={{ marginBottom: 16 }}>
-              <label style={{ display: 'block', marginBottom: 8 }}>主题风格：</label>
-              <Select
-                mode="multiple"
-                value={editingAlbum.theme_styles}
-                onChange={(values) => {
-                  setEditingAlbum({ ...editingAlbum, theme_styles: values })
-                }}
-                style={{ width: '100%' }}
-                placeholder="选择主题风格"
-              >
-                {themeStyleOptions.map((option) => (
-                  <Option key={option.value} value={option.value}>
-                    {option.label}
-                  </Option>
-                ))}
-              </Select>
-            </div>
-
-            <div style={{ marginBottom: 16 }}>
-              <label style={{ display: 'block', marginBottom: 8 }}>活动标签：</label>
-              <Select
-                mode="multiple"
-                value={editingAlbum.activity_tags}
-                onChange={(values) => {
-                  setEditingAlbum({ ...editingAlbum, activity_tags: values })
-                }}
-                style={{ width: '100%' }}
-                placeholder="选择活动标签"
-              >
-                {activityTagOptions.map((option) => (
-                  <Option key={option.value} value={option.value}>
-                    {option.label}
-                  </Option>
-                ))}
-              </Select>
-            </div>
+            <Row gutter={16}>
+              <Col span={12}>
+                <div style={{ marginBottom: 16 }}>
+                  <label style={{ display: 'block', marginBottom: 8 }}>主题风格：</label>
+                  <Select
+                    mode="multiple"
+                    value={editingAlbum.theme_styles}
+                    onChange={(values) => {
+                      setEditingAlbum({ ...editingAlbum, theme_styles: values })
+                    }}
+                    style={{ width: '100%' }}
+                    placeholder="选择主题风格"
+                  >
+                    {themeStyleOptions.map((option) => (
+                      <Option key={option.value} value={option.value}>
+                        {option.label}
+                      </Option>
+                    ))}
+                  </Select>
+                </div>
+              </Col>
+              <Col span={12}>
+                <div style={{ marginBottom: 16 }}>
+                  <label style={{ display: 'block', marginBottom: 8 }}>活动标签：</label>
+                  <Select
+                    mode="multiple"
+                    value={editingAlbum.activity_tags}
+                    onChange={(values) => {
+                      setEditingAlbum({ ...editingAlbum, activity_tags: values })
+                    }}
+                    style={{ width: '100%' }}
+                    placeholder="选择活动标签"
+                  >
+                    {activityTagOptions.map((option) => (
+                      <Option key={option.value} value={option.value}>
+                        {option.label}
+                      </Option>
+                    ))}
+                  </Select>
+                </div>
+              </Col>
+            </Row>
 
             {/* 根据 task_execution_type 显示不同的配置区域 */}
             
@@ -1393,147 +1427,228 @@ export default function AlbumListPage() {
               <>
                 <Divider>豆包图生图配置</Divider>
 
-                <div style={{ marginBottom: 16 }}>
-                  <label style={{ display: 'block', marginBottom: 8 }}>Prompt文本（prompt_text）：</label>
-                  <TextArea
-                    value={editingAlbum.prompt_text || ''}
-                    onChange={(e) => {
-                      setEditingAlbum({ ...editingAlbum, prompt_text: e.target.value })
-                    }}
-                    rows={4}
-                    placeholder="输入Prompt文本，描述要生成的图片效果"
-                  />
-                  <div style={{ marginTop: 8, fontSize: 12, color: '#666' }}>
-                    提示：豆包图生图支持1张或多张参考图片，请确保已上传原始图
-                  </div>
-                </div>
+                <Row gutter={16}>
+                  <Col span={12}>
+                    <div style={{ marginBottom: 16 }}>
+                      <label style={{ display: 'block', marginBottom: 8 }}>Prompt文本（prompt_text）：</label>
+                      <TextArea
+                        value={editingAlbum.prompt_text || ''}
+                        onChange={(e) => {
+                          setEditingAlbum({ ...editingAlbum, prompt_text: e.target.value })
+                        }}
+                        rows={4}
+                        placeholder="输入Prompt文本，描述要生成的图片效果"
+                      />
+                      <div style={{ marginTop: 8, fontSize: 12, color: '#666' }}>
+                        提示：豆包图生图支持1张或多张参考图片，请确保已上传原始图
+                      </div>
+                    </div>
+                  </Col>
+                  <Col span={12}>
+                    <div style={{ marginBottom: 16 }}>
+                      <label style={{ display: 'block', marginBottom: 8 }}>风格描述（style_description）：</label>
+                      <TextArea
+                        value={editingAlbum.style_description || ''}
+                        onChange={(e) => {
+                          setEditingAlbum({ ...editingAlbum, style_description: e.target.value })
+                        }}
+                        rows={4}
+                        placeholder="输入风格描述（可选）"
+                      />
+                    </div>
+                  </Col>
+                </Row>
 
                 {/* 原始图上传组件（使用 src_images） */}
                 <div style={{ marginBottom: 16 }}>
-                  <label style={{ display: 'block', marginBottom: 8 }}>原始图1（src_images[0]）：</label>
+                  <label style={{ display: 'block', marginBottom: 8 }}>原始图：</label>
                   <Row gutter={16}>
-                    <Col span={12}>
-                      <Upload
-                        listType="picture-card"
-                        maxCount={1}
-                        beforeUpload={() => false}
-                        onChange={handleSrcImage1Change}
-                        accept="image/*"
-                        showUploadList={false}
-                      >
-                        {(srcImage1Preview || editingAlbum.src_images?.[0]) ? (
-                          <Image
-                            src={srcImage1Preview || editingAlbum.src_images?.[0]}
-                            alt="原始图1"
-                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                            preview={false}
-                          />
-                        ) : (
-                          <div>
-                            <UploadOutlined />
-                            <div style={{ marginTop: 8 }}>上传原始图1</div>
+                    {/* 原始图1 */}
+                    <Col span={6}>
+                      <div style={{ marginBottom: 16 }}>
+                        <div style={{ marginBottom: 8, fontSize: 12, color: '#666' }}>原始图1（src_images[0]）：</div>
+                        <div style={{ 
+                          width: '100%', 
+                          border: '1px solid #d9d9d9', 
+                          borderRadius: 4,
+                          padding: 8,
+                          backgroundColor: '#fafafa'
+                        }}>
+                          <div style={{ 
+                            width: '100%', 
+                            aspectRatio: '1',
+                            marginBottom: 8,
+                            border: '1px solid #e8e8e8',
+                            borderRadius: 4,
+                            overflow: 'hidden',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            backgroundColor: '#fff',
+                            position: 'relative'
+                          }}>
+                            <Upload
+                              listType="picture-card"
+                              maxCount={1}
+                              beforeUpload={() => false}
+                              onChange={handleSrcImage1Change}
+                              accept="image/*"
+                              showUploadList={false}
+                              style={{ width: '100%', height: '100%' }}
+                            >
+                              {(srcImage1Preview || editingAlbum.src_images?.[0]) ? (
+                                <div style={{ 
+                                  width: '100%', 
+                                  height: '100%', 
+                                  position: 'relative'
+                                }}>
+                                  <img
+                                    src={srcImage1Preview || editingAlbum.src_images?.[0]}
+                                    alt="原始图1"
+                                    style={{ 
+                                      width: '100%', 
+                                      height: '100%', 
+                                      objectFit: 'cover',
+                                      pointerEvents: 'none'
+                                    }}
+                                    onError={(e) => {
+                                      ;(e.target as HTMLImageElement).style.display = 'none'
+                                    }}
+                                  />
+                                  <div 
+                                    style={{
+                                      position: 'absolute',
+                                      top: 4,
+                                      right: 4,
+                                      backgroundColor: 'rgba(0, 0, 0, 0.7)',
+                                      color: '#fff',
+                                      padding: '4px 8px',
+                                      borderRadius: 4,
+                                      fontSize: 12,
+                                      cursor: 'pointer',
+                                      zIndex: 10
+                                    }}
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      const url = srcImage1Preview || editingAlbum.src_images?.[0]
+                                      if (url) {
+                                        setPreviewImage({ visible: true, url })
+                                      }
+                                    }}
+                                    title="点击预览大图"
+                                  >
+                                    预览
+                                  </div>
+                                </div>
+                              ) : (
+                                <div>
+                                  <UploadOutlined />
+                                  <div style={{ marginTop: 8 }}>上传原始图1</div>
+                                </div>
+                              )}
+                            </Upload>
                           </div>
-                        )}
-                      </Upload>
-                    </Col>
-                    <Col span={12}>
-                      <div>
-                        <div style={{ marginBottom: 8, fontSize: 12, color: '#666' }}>图片URL：</div>
-                        <Input
-                          value={editingAlbum.src_images?.[0] || ''}
-                          onChange={(e) => {
-                            const srcImages = editingAlbum.src_images || []
-                            srcImages[0] = e.target.value
-                            setEditingAlbum({ ...editingAlbum, src_images: srcImages })
-                          }}
-                          placeholder="输入或上传原始图1 URL"
-                          style={{ fontSize: 12 }}
-                          allowClear
-                        />
+                          <Input
+                            value={editingAlbum.src_images?.[0] || ''}
+                            onChange={(e) => {
+                              const srcImages = editingAlbum.src_images || []
+                              srcImages[0] = e.target.value
+                              setEditingAlbum({ ...editingAlbum, src_images: srcImages })
+                            }}
+                            placeholder="输入或上传原始图1 URL"
+                            style={{ fontSize: 12 }}
+                            allowClear
+                          />
+                        </div>
                       </div>
                     </Col>
-                  </Row>
-                </div>
 
-                {/* 多人合拍模式：显示第二个原始图上传组件 */}
-                {editingAlbum.is_multi_person === true && (
-                  <>
-                    <div style={{ marginBottom: 16 }}>
-                      <label style={{ display: 'block', marginBottom: 8 }}>原始图1（src_images[0]）：</label>
-                      <Row gutter={16}>
-                        <Col span={12}>
-                          <Upload
-                            listType="picture-card"
-                            maxCount={1}
-                            beforeUpload={() => false}
-                            onChange={handleSrcImage1Change}
-                            accept="image/*"
-                            showUploadList={false}
-                          >
-                            {(srcImage1Preview || editingAlbum.src_images?.[0]) ? (
-                              <Image
-                                src={srcImage1Preview || editingAlbum.src_images?.[0]}
-                                alt="原始图1"
-                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                                preview={false}
-                              />
-                            ) : (
-                              <div>
-                                <UploadOutlined />
-                                <div style={{ marginTop: 8 }}>上传原始图1</div>
-                              </div>
-                            )}
-                          </Upload>
-                        </Col>
-                        <Col span={12}>
-                          <div>
-                            <div style={{ marginBottom: 8, fontSize: 12, color: '#666' }}>图片URL：</div>
-                            <Input
-                              value={editingAlbum.src_images?.[0] || ''}
-                              onChange={(e) => {
-                                const srcImages = editingAlbum.src_images || []
-                                srcImages[0] = e.target.value
-                                setEditingAlbum({ ...editingAlbum, src_images: srcImages })
-                              }}
-                              placeholder="输入或上传原始图1 URL"
-                              style={{ fontSize: 12 }}
-                              allowClear
-                            />
-                          </div>
-                        </Col>
-                      </Row>
-                    </div>
-
-                    <div style={{ marginBottom: 16 }}>
-                      <label style={{ display: 'block', marginBottom: 8 }}>原始图2（src_images[1]）：</label>
-                      <Row gutter={16}>
-                        <Col span={12}>
-                          <Upload
-                            listType="picture-card"
-                            maxCount={1}
-                            beforeUpload={() => false}
-                            onChange={handleSrcImage2Change}
-                            accept="image/*"
-                            showUploadList={false}
-                          >
-                            {(srcImage2Preview || editingAlbum.src_images?.[1]) ? (
-                              <Image
-                                src={srcImage2Preview || editingAlbum.src_images?.[1]}
-                                alt="原始图2"
-                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                                preview={false}
-                              />
-                            ) : (
-                              <div>
-                                <UploadOutlined />
-                                <div style={{ marginTop: 8 }}>上传原始图2</div>
-                              </div>
-                            )}
-                          </Upload>
-                        </Col>
-                        <Col span={12}>
-                          <div>
-                            <div style={{ marginBottom: 8, fontSize: 12, color: '#666' }}>图片URL：</div>
+                    {/* 原始图2 - 仅在多人合拍模式或已有图2时显示 */}
+                    {(editingAlbum.is_multi_person === true || editingAlbum.src_images?.[1]) && (
+                      <Col span={6}>
+                        <div style={{ marginBottom: 16 }}>
+                          <div style={{ marginBottom: 8, fontSize: 12, color: '#666' }}>原始图2（src_images[1]）：</div>
+                          <div style={{ 
+                            width: '100%', 
+                            border: '1px solid #d9d9d9', 
+                            borderRadius: 4,
+                            padding: 8,
+                            backgroundColor: '#fafafa'
+                          }}>
+                            <div style={{ 
+                              width: '100%', 
+                              aspectRatio: '1',
+                              marginBottom: 8,
+                              border: '1px solid #e8e8e8',
+                              borderRadius: 4,
+                              overflow: 'hidden',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              backgroundColor: '#fff',
+                              position: 'relative'
+                            }}>
+                              <Upload
+                                listType="picture-card"
+                                maxCount={1}
+                                beforeUpload={() => false}
+                                onChange={handleSrcImage2Change}
+                                accept="image/*"
+                                showUploadList={false}
+                                style={{ width: '100%', height: '100%' }}
+                              >
+                                {(srcImage2Preview || editingAlbum.src_images?.[1]) ? (
+                                  <div style={{ 
+                                    width: '100%', 
+                                    height: '100%', 
+                                    position: 'relative'
+                                  }}>
+                                    <img
+                                      src={srcImage2Preview || editingAlbum.src_images?.[1]}
+                                      alt="原始图2"
+                                      style={{ 
+                                        width: '100%', 
+                                        height: '100%', 
+                                        objectFit: 'cover',
+                                        pointerEvents: 'none'
+                                      }}
+                                      onError={(e) => {
+                                        ;(e.target as HTMLImageElement).style.display = 'none'
+                                      }}
+                                    />
+                                    <div 
+                                      style={{
+                                        position: 'absolute',
+                                        top: 4,
+                                        right: 4,
+                                        backgroundColor: 'rgba(0, 0, 0, 0.7)',
+                                        color: '#fff',
+                                        padding: '4px 8px',
+                                        borderRadius: 4,
+                                        fontSize: 12,
+                                        cursor: 'pointer',
+                                        zIndex: 10
+                                      }}
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        const url = srcImage2Preview || editingAlbum.src_images?.[1]
+                                        if (url) {
+                                          setPreviewImage({ visible: true, url })
+                                        }
+                                      }}
+                                      title="点击预览大图"
+                                    >
+                                      预览
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div>
+                                    <UploadOutlined />
+                                    <div style={{ marginTop: 8 }}>上传原始图2</div>
+                                  </div>
+                                )}
+                              </Upload>
+                            </div>
                             <Input
                               value={editingAlbum.src_images?.[1] || ''}
                               onChange={(e) => {
@@ -1546,42 +1661,97 @@ export default function AlbumListPage() {
                               allowClear
                             />
                           </div>
-                        </Col>
-                      </Row>
-                    </div>
-                  </>
-                )}
+                        </div>
+                      </Col>
+                    )}
+                  </Row>
+                </div>
 
-                <div style={{ marginBottom: 16 }}>
-                  <label style={{ display: 'block', marginBottom: 8 }}>结果图（result_image）：</label>
-                  <Row gutter={16}>
-                    <Col span={12}>
-                      <Upload
-                        listType="picture-card"
-                        maxCount={1}
-                        beforeUpload={() => false}
-                        onChange={handleResultImageChange}
-                        accept="image/*"
-                        showUploadList={false}
-                      >
-                        {(resultImagePreview || editingAlbum.result_image) ? (
-                          <Image
-                            src={resultImagePreview || editingAlbum.result_image}
-                            alt="结果图"
-                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                            preview={false}
-                          />
-                        ) : (
-                          <div>
-                            <UploadOutlined />
-                            <div style={{ marginTop: 8 }}>上传结果图</div>
-                          </div>
-                        )}
-                      </Upload>
-                    </Col>
-                    <Col span={12}>
-                      <div>
-                        <div style={{ marginBottom: 8, fontSize: 12, color: '#666' }}>图片URL：</div>
+                <Row gutter={16}>
+                  <Col span={6}>
+                    <div style={{ marginBottom: 16 }}>
+                      <label style={{ display: 'block', marginBottom: 8 }}>结果图（result_image）：</label>
+                      <div style={{ 
+                        width: '100%', 
+                        border: '1px solid #d9d9d9', 
+                        borderRadius: 4,
+                        padding: 8,
+                        backgroundColor: '#fafafa'
+                      }}>
+                        <div style={{ 
+                          width: '100%', 
+                          aspectRatio: '1',
+                          marginBottom: 8,
+                          border: '1px solid #e8e8e8',
+                          borderRadius: 4,
+                          overflow: 'hidden',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          backgroundColor: '#fff',
+                          position: 'relative'
+                        }}>
+                          <Upload
+                            listType="picture-card"
+                            maxCount={1}
+                            beforeUpload={() => false}
+                            onChange={handleResultImageChange}
+                            accept="image/*"
+                            showUploadList={false}
+                            style={{ width: '100%', height: '100%' }}
+                          >
+                            {(resultImagePreview || editingAlbum.result_image) ? (
+                              <div style={{ 
+                                width: '100%', 
+                                height: '100%', 
+                                position: 'relative'
+                              }}>
+                                <img
+                                  src={resultImagePreview || editingAlbum.result_image}
+                                  alt="结果图"
+                                  style={{ 
+                                    width: '100%', 
+                                    height: '100%', 
+                                    objectFit: 'cover',
+                                    pointerEvents: 'none'
+                                  }}
+                                  onError={(e) => {
+                                    ;(e.target as HTMLImageElement).style.display = 'none'
+                                  }}
+                                />
+                                <div 
+                                  style={{
+                                    position: 'absolute',
+                                    top: 4,
+                                    right: 4,
+                                    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+                                    color: '#fff',
+                                    padding: '4px 8px',
+                                    borderRadius: 4,
+                                    fontSize: 12,
+                                    cursor: 'pointer',
+                                    zIndex: 10
+                                  }}
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    const url = resultImagePreview || editingAlbum.result_image
+                                    if (url) {
+                                      setPreviewImage({ visible: true, url })
+                                    }
+                                  }}
+                                  title="点击预览大图"
+                                >
+                                  预览
+                                </div>
+                              </div>
+                            ) : (
+                              <div>
+                                <UploadOutlined />
+                                <div style={{ marginTop: 8 }}>上传结果图</div>
+                              </div>
+                            )}
+                          </Upload>
+                        </div>
                         <Input
                           value={editingAlbum.result_image || ''}
                           onChange={(e) => {
@@ -1592,73 +1762,108 @@ export default function AlbumListPage() {
                           allowClear
                         />
                       </div>
+                    </div>
+                  </Col>
+                  <Col span={12}>
+                    {/* 空列，保持布局平衡 */}
+                  </Col>
+                </Row>
+
+                <Row gutter={16}>
+                  <Col span={12}>
+                    <div style={{ marginBottom: 16 }}>
+                      <label style={{ display: 'block', marginBottom: 8 }}>
+                        排除结果图（exclude_result_image）：
+                        <Tooltip title="开启后，生图时将不参考 result_image，仅使用用户自拍图 + prompt 生成。默认开启（即不参考 result_image）。图片数组顺序：result_image 在首位，后续为用户自拍。">
+                          <span style={{ marginLeft: 4, color: '#1890ff', cursor: 'help' }}>❓</span>
+                        </Tooltip>
+                      </label>
+                      <Switch
+                        checked={editingAlbum.exclude_result_image !== false}
+                        onChange={(checked) => {
+                          setEditingAlbum({ ...editingAlbum, exclude_result_image: checked })
+                        }}
+                      />
+                      <div style={{ marginTop: 8, fontSize: 12, color: '#666' }}>
+                        当前图片数组顺序：<strong>{
+                          editingAlbum.exclude_result_image !== false
+                            ? (editingAlbum.is_multi_person === true ? '[selfie1, selfie2]' : '[selfie1]')
+                            : (editingAlbum.is_multi_person === true ? '[result_image, selfie1, selfie2]' : '[result_image, selfie1]')
+                        }</strong> + prompt
+                      </div>
+                    </div>
+                  </Col>
+                  <Col span={12}>
+                    <div style={{ marginBottom: 16 }}>
+                      <label style={{ display: 'block', marginBottom: 8 }}>
+                        多人合拍模式（is_multi_person）：
+                        <Tooltip title="开启后，强制要求用户上传2张自拍。默认关闭（即单人模式，只需1张自拍）。">
+                          <span style={{ marginLeft: 4, color: '#1890ff', cursor: 'help' }}>❓</span>
+                        </Tooltip>
+                      </label>
+                      <Switch
+                        checked={editingAlbum.is_multi_person === true}
+                        onChange={(checked) => {
+                          setEditingAlbum({ ...editingAlbum, is_multi_person: checked })
+                        }}
+                      />
+                      <div style={{ marginTop: 8, fontSize: 12, color: '#666' }}>
+                        {editingAlbum.is_multi_person === true ? '多人合拍模式（需要2张自拍）' : '单人模式（默认：只需1张自拍）'}
+                      </div>
+                    </div>
+                  </Col>
+                </Row>
+
+                <Row gutter={16}>
+                  
+                  <Col span={12}>
+                    <div style={{ marginBottom: 16 }}>
+                      <label style={{ display: 'block', marginBottom: 8 }}>
+                        支持自定义提示词（enable_custom_prompt）：
+                      </label>
+                      <Switch
+                        checked={editingAlbum.enable_custom_prompt !== false}
+                        onChange={(checked) => {
+                          setEditingAlbum({ ...editingAlbum, enable_custom_prompt: checked })
+                        }}
+                      />
+                      <div style={{ marginTop: 8, fontSize: 12, color: '#666' }}>
+                        默认开启：App 端会展示输入框，用户可手动输入想说的话（custom_prompt）
+                      </div>
+                    </div>
+                  </Col>
+                </Row>
+
+                {editingAlbum.enable_custom_prompt !== false && (
+                  <Row gutter={16}>
+                    <Col span={12}>
+                      <div style={{ marginBottom: 16 }}>
+                        <label style={{ display: 'block', marginBottom: 8 }}>默认自定义提示词（custom_prompt，可选）：</label>
+                        <TextArea
+                          value={editingAlbum.custom_prompt || ''}
+                          onChange={(e) => {
+                            setEditingAlbum({ ...editingAlbum, custom_prompt: e.target.value })
+                          }}
+                          rows={2}
+                          placeholder="可为空；若填写，App 输入框默认填入该值"
+                        />
+                      </div>
+                    </Col>
+                    <Col span={12}>
+                      <div style={{ marginBottom: 16 }}>
+                        <label style={{ display: 'block', marginBottom: 8 }}>小贴士（custom_prompt_tips，可选）：</label>
+                        <TextArea
+                          value={editingAlbum.custom_prompt_tips || ''}
+                          onChange={(e) => {
+                            setEditingAlbum({ ...editingAlbum, custom_prompt_tips: e.target.value })
+                          }}
+                          rows={2}
+                          placeholder="会在 App 输入框附近展示为小贴士"
+                        />
+                      </div>
                     </Col>
                   </Row>
-                </div>
-
-                <div style={{ marginBottom: 16 }}>
-                  <label style={{ display: 'block', marginBottom: 8 }}>风格描述（style_description）：</label>
-                  <TextArea
-                    value={editingAlbum.style_description || ''}
-                    onChange={(e) => {
-                      setEditingAlbum({ ...editingAlbum, style_description: e.target.value })
-                    }}
-                    rows={3}
-                    placeholder="输入风格描述（可选）"
-                  />
-                </div>
-
-                <div style={{ marginBottom: 16 }}>
-                  <label style={{ display: 'block', marginBottom: 8 }}>
-                    排除结果图（exclude_result_image）：
-                    <Tooltip title="开启后，生图时将不参考 result_image，仅使用用户自拍图 + prompt 生成。默认开启（即不参考 result_image）。图片数组顺序：result_image 在首位，后续为用户自拍。">
-                      <span style={{ marginLeft: 4, color: '#1890ff', cursor: 'help' }}>❓</span>
-                    </Tooltip>
-                  </label>
-                  <Switch
-                    checked={editingAlbum.exclude_result_image !== false}
-                    onChange={(checked) => {
-                      setEditingAlbum({ ...editingAlbum, exclude_result_image: checked })
-                    }}
-                  />
-                  <span style={{ marginLeft: 8, fontSize: 12, color: '#666' }}>
-                    {editingAlbum.exclude_result_image !== false 
-                      ? '不参考 result_image，仅使用用户自拍图 + prompt' 
-                      : '参考 result_image，使用 result_image + 用户自拍图 + prompt'}
-                  </span>
-                  <div style={{ marginTop: 8, fontSize: 12, color: '#666' }}>
-                    提示：当前配置的图片数组顺序为 <strong>{
-                      editingAlbum.exclude_result_image !== false
-                        ? (editingAlbum.is_multi_person === true ? '[selfie1, selfie2]' : '[selfie1]')
-                        : (editingAlbum.is_multi_person === true ? '[result_image, selfie1, selfie2]' : '[result_image, selfie1]')
-                    }</strong> + prompt
-                  </div>
-                </div>
-
-                <div style={{ marginBottom: 16 }}>
-                  <label style={{ display: 'block', marginBottom: 8 }}>
-                    多人合拍模式（is_multi_person）：
-                    <Tooltip title="开启后，强制要求用户上传2张自拍。默认关闭（即单人模式，只需1张自拍）。">
-                      <span style={{ marginLeft: 4, color: '#1890ff', cursor: 'help' }}>❓</span>
-                    </Tooltip>
-                  </label>
-                  <Switch
-                    checked={editingAlbum.is_multi_person === true}
-                    onChange={(checked) => {
-                      setEditingAlbum({ ...editingAlbum, is_multi_person: checked })
-                    }}
-                  />
-                  <span style={{ marginLeft: 8, fontSize: 12, color: '#666' }}>
-                    {editingAlbum.is_multi_person === true ? '多人合拍模式（需要2张自拍）' : '单人模式（默认：只需1张自拍）'}
-                  </span>
-                  <div style={{ marginTop: 8, fontSize: 12, color: '#666' }}>
-                    提示：开启后，用户在创作时需要选择2张自拍。当前配置的图片数组顺序为 <strong>{
-                      editingAlbum.exclude_result_image !== false
-                        ? (editingAlbum.is_multi_person === true ? '[selfie1, selfie2]' : '[selfie1]')
-                        : (editingAlbum.is_multi_person === true ? '[result_image, selfie1, selfie2]' : '[result_image, selfie1]')
-                    }</strong> + prompt
-                  </div>
-                </div>
+                )}
               </>
             )}
           </div>

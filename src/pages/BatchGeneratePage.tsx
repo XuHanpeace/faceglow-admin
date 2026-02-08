@@ -132,6 +132,13 @@ export default function BatchGeneratePage() {
           form.setFieldsValue({ enable_custom_prompt: true })
         }
       }
+      // 豆包图生图：默认启用自定义提示词（enable_custom_prompt）
+      if (changedValues.task_execution_type === 'async_doubao_image_to_image') {
+        const currentEnable = allValues?.enable_custom_prompt
+        if (currentEnable === undefined) {
+          form.setFieldsValue({ enable_custom_prompt: true })
+        }
+      }
     }
     updatePreview()
   }
@@ -531,7 +538,7 @@ export default function BatchGeneratePage() {
       <Sidebar activePage={activePage} onNavigate={handleNavigate} />
       <div className="flex-1 ml-64">
         <Header user={{ name: '管理员', avatarUrl: '' }} title="创建相册" />
-        <main className="p-6 mt-16">
+        <main className="p-6 mt-16" style={{ maxWidth: '1700px', margin: '0 auto' }}>
           <Row gutter={[24, 24]}>
             {/* 左侧表单 */}
             <Col xs={24} lg={16}>
@@ -1023,6 +1030,48 @@ export default function BatchGeneratePage() {
                                 提示：开启后，用户在创作时需要选择2张自拍。当前配置的图片数组顺序为 <strong>{arrayFormat}</strong> + prompt
                               </div>
                             </div>
+                          )
+                        }}
+                      </Form.Item>
+
+                      <Form.Item
+                        name="enable_custom_prompt"
+                        label="支持自定义提示词（enable_custom_prompt）"
+                        valuePropName="checked"
+                        initialValue={true}
+                        tooltip="默认为开启：App 端 BeforeCreation 会展示输入框，用户可手动输入想说的话（custom_prompt）"
+                      >
+                        <Switch />
+                      </Form.Item>
+
+                      <Form.Item
+                        noStyle
+                        shouldUpdate={(prevValues: Record<string, unknown>, currentValues: Record<string, unknown>) =>
+                          prevValues?.enable_custom_prompt !== currentValues?.enable_custom_prompt
+                        }
+                      >
+                        {({ getFieldValue }) => {
+                          const enabled = !!getFieldValue('enable_custom_prompt')
+                          if (!enabled) return null
+
+                          return (
+                            <>
+                              <Form.Item
+                                name="custom_prompt"
+                                label="默认自定义提示词（custom_prompt，可选）"
+                                tooltip="可为空；若填写，App 输入框会默认填入该值，用户可修改"
+                              >
+                                <TextArea rows={2} placeholder="例如：将图2中的人物替换为图1的人物，保持场景不变..." />
+                              </Form.Item>
+
+                              <Form.Item
+                                name="custom_prompt_tips"
+                                label="小贴士（custom_prompt_tips，可选）"
+                                tooltip="会在 App 端输入框附近展示为小贴士（仅 enable_custom_prompt=true 时展示）"
+                              >
+                                <TextArea rows={2} placeholder="例如：可以描述你想要的效果、风格、细节等" />
+                              </Form.Item>
+                            </>
                           )
                         }}
                       </Form.Item>
