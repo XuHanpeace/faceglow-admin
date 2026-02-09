@@ -177,8 +177,6 @@ const AlbumFormItem: React.FC<AlbumFormProps> = ({ item, index, categories, targ
               tooltip="选择模型，决定调用哪个云函数以及需要填写哪些参数"
             >
               <Select placeholder="选择模型">
-                <Option value="sync_portrait">同步执行 - 个人写真换脸（调用 fusion）</Option>
-                <Option value="sync_group_photo">同步执行 - 多人合拍换脸（调用 fusion）</Option>
                 <Option value="async_image_to_image">异步执行 - 图生图（调用 callBailian）</Option>
                 <Option value="async_image_to_video">异步执行 - 图生视频（调用 callBailian）</Option>
                 <Option value="async_video_effect">异步执行 - 视频特效（调用 callBailian）</Option>

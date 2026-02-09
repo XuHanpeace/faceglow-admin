@@ -76,6 +76,11 @@ export interface AlbumRecord {
   // 豆包图生图相关字段
   exclude_result_image?: boolean // 是否排除 result_image（默认 false，即包含 result_image，保持历史版本兼容）
   is_multi_person?: boolean // 是否为多人合拍模式（默认 false，即单人模式。当为 true 时，强制要求用户上传2张自拍）
+  // 混元生图相关字段
+  hunyuan_resolution?: string // 生成图分辨率（如 '720:1280'，默认 9:16）
+  hunyuan_revise?: boolean // 是否开启 prompt 扩写（默认 true，即默认启用）
+  /** 任务级参数（客户端透传云函数，如混元 resolution/revise；新增模型由后台配置此字段即可，客户端无需改） */
+  task_params?: Record<string, any>
   // 发布状态
   published?: boolean
   created_at?: string

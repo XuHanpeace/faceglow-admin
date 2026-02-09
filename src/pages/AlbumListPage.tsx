@@ -472,6 +472,51 @@ export default function AlbumListPage() {
         }
       }
 
+      // 异步任务 - 混元生图
+      if (taskType === 'async_hunyuan_image') {
+        if (editingAlbum.src_images !== undefined) {
+          updates.src_images = editingAlbum.src_images
+          if (editingAlbum.src_images && editingAlbum.src_images.length > 0 && editingAlbum.src_images[0]) {
+            updates.src_image = editingAlbum.src_images[0]
+          }
+        }
+        if (editingAlbum.src_image) {
+          updates.src_image = editingAlbum.src_image
+        }
+        if (editingAlbum.result_image) {
+          updates.result_image = editingAlbum.result_image
+        }
+        if (editingAlbum.prompt_text !== undefined) {
+          updates.prompt_text = editingAlbum.prompt_text
+        }
+        if (editingAlbum.hunyuan_resolution !== undefined) {
+          updates.hunyuan_resolution = editingAlbum.hunyuan_resolution
+        }
+        if (editingAlbum.hunyuan_revise !== undefined) {
+          updates.hunyuan_revise = editingAlbum.hunyuan_revise
+        }
+        if (editingAlbum.is_multi_person !== undefined) {
+          updates.is_multi_person = editingAlbum.is_multi_person
+        }
+        // enable_custom_prompt 必须明确保存
+        if (editingAlbum.enable_custom_prompt !== undefined && editingAlbum.enable_custom_prompt !== null) {
+          updates.enable_custom_prompt = editingAlbum.enable_custom_prompt
+        } else {
+          updates.enable_custom_prompt = true
+        }
+        if (editingAlbum.custom_prompt !== undefined) {
+          updates.custom_prompt = editingAlbum.custom_prompt
+        }
+        if (editingAlbum.custom_prompt_tips !== undefined) {
+          updates.custom_prompt_tips = editingAlbum.custom_prompt_tips
+        }
+        // 任务级参数（客户端透传云函数）
+        updates.task_params = {
+          resolution: editingAlbum.hunyuan_resolution || '720:1280',
+          revise: editingAlbum.hunyuan_revise !== false ? 1 : 0,
+        }
+      }
+
       await albumService.updateAlbum(editingAlbum.album_id, updates)
       message.success('保存成功')
       setEditModalVisible(false)
@@ -505,6 +550,7 @@ export default function AlbumListPage() {
       'async_video_effect': '异步执行 - 视频特效',
       'async_portrait_style_redraw': '异步执行 - 人像风格重绘',
       'async_doubao_image_to_image': '异步执行 - 豆包图生图',
+      'async_hunyuan_image': '异步执行 - 混元生图',
       // 向后兼容
       'sync': '同步执行（sync）',
       'async': '异步执行（async）',
@@ -514,13 +560,12 @@ export default function AlbumListPage() {
 
   // 任务执行类型选项
   const taskExecutionTypeOptions = [
-    { value: 'sync_portrait', label: '同步执行 - 个人写真换脸（调用 fusion）' },
-    { value: 'sync_group_photo', label: '同步执行 - 多人合拍换脸（调用 fusion）' },
     { value: 'async_image_to_image', label: '异步执行 - 图生图（调用 callBailian）' },
     { value: 'async_image_to_video', label: '异步执行 - 图生视频（调用 callBailian）' },
     { value: 'async_video_effect', label: '异步执行 - 视频特效（调用 callBailian）' },
     { value: 'async_portrait_style_redraw', label: '异步执行 - 人像风格重绘（调用 callBailian）' },
     { value: 'async_doubao_image_to_image', label: '异步执行 - 豆包图生图（调用 callBailian）' },
+    { value: 'async_hunyuan_image', label: '异步执行 - 混元生图（调用 callBailian）' },
   ]
 
   // 获取功能类型选项
@@ -1829,6 +1874,141 @@ export default function AlbumListPage() {
                       />
                       <div style={{ marginTop: 8, fontSize: 12, color: '#666' }}>
                         默认开启：App 端会展示输入框，用户可手动输入想说的话（custom_prompt）
+                      </div>
+                    </div>
+                  </Col>
+                </Row>
+
+                {editingAlbum.enable_custom_prompt !== false && (
+                  <Row gutter={16}>
+                    <Col span={12}>
+                      <div style={{ marginBottom: 16 }}>
+                        <label style={{ display: 'block', marginBottom: 8 }}>默认自定义提示词（custom_prompt，可选）：</label>
+                        <TextArea
+                          value={editingAlbum.custom_prompt || ''}
+                          onChange={(e) => {
+                            setEditingAlbum({ ...editingAlbum, custom_prompt: e.target.value })
+                          }}
+                          rows={2}
+                          placeholder="可为空；若填写，App 输入框默认填入该值"
+                        />
+                      </div>
+                    </Col>
+                    <Col span={12}>
+                      <div style={{ marginBottom: 16 }}>
+                        <label style={{ display: 'block', marginBottom: 8 }}>小贴士（custom_prompt_tips，可选）：</label>
+                        <TextArea
+                          value={editingAlbum.custom_prompt_tips || ''}
+                          onChange={(e) => {
+                            setEditingAlbum({ ...editingAlbum, custom_prompt_tips: e.target.value })
+                          }}
+                          rows={2}
+                          placeholder="会在 App 输入框附近展示为小贴士"
+                        />
+                      </div>
+                    </Col>
+                  </Row>
+                )}
+              </>
+            )}
+
+            {/* 异步任务 - 混元生图配置 */}
+            {editingAlbum.task_execution_type === 'async_hunyuan_image' && (
+              <>
+                <Divider>混元生图配置</Divider>
+
+                <Row gutter={16}>
+                  <Col span={12}>
+                    <div style={{ marginBottom: 16 }}>
+                      <label style={{ display: 'block', marginBottom: 8 }}>Prompt文本（prompt_text）：</label>
+                      <TextArea
+                        value={editingAlbum.prompt_text || ''}
+                        onChange={(e) => {
+                          setEditingAlbum({ ...editingAlbum, prompt_text: e.target.value })
+                        }}
+                        rows={4}
+                        placeholder="输入Prompt文本，描述要生成的图片"
+                      />
+                    </div>
+                  </Col>
+                  <Col span={12}>
+                    <div style={{ marginBottom: 16 }}>
+                      <label style={{ display: 'block', marginBottom: 8 }}>生成图分辨率（hunyuan_resolution）：</label>
+                      <Select
+                        value={editingAlbum.hunyuan_resolution || '720:1280'}
+                        onChange={(value) => {
+                          setEditingAlbum({ ...editingAlbum, hunyuan_resolution: value })
+                        }}
+                        style={{ width: '100%' }}
+                      >
+                        <Option value="720:1280">720:1280（9:16 竖图）</Option>
+                        <Option value="1280:720">1280:720（16:9 横图）</Option>
+                        <Option value="768:1024">768:1024（3:4 竖图）</Option>
+                        <Option value="1024:768">1024:768（4:3 横图）</Option>
+                        <Option value="768:1280">768:1280（3:5 竖图）</Option>
+                        <Option value="1280:768">1280:768（5:3 横图）</Option>
+                        <Option value="768:768">768:768（1:1 方图）</Option>
+                        <Option value="1024:1024">1024:1024（1:1 方图）</Option>
+                      </Select>
+                    </div>
+                  </Col>
+                </Row>
+
+                <Row gutter={16}>
+                  <Col span={12}>
+                    <div style={{ marginBottom: 16 }}>
+                      <label style={{ display: 'block', marginBottom: 8 }}>
+                        多人合拍模式（is_multi_person）：
+                        <Tooltip title="开启后，需两张原始图；客户端相册卡片将展示两个头像（如情侣拜年样式）。">
+                          <span style={{ marginLeft: 4, color: '#1890ff', cursor: 'help' }}>❓</span>
+                        </Tooltip>
+                      </label>
+                      <Switch
+                        checked={editingAlbum.is_multi_person === true}
+                        onChange={(checked) => {
+                          setEditingAlbum({ ...editingAlbum, is_multi_person: checked })
+                        }}
+                      />
+                      <div style={{ marginTop: 8, fontSize: 12, color: '#666' }}>
+                        {editingAlbum.is_multi_person === true ? '已开启：客户端显示两张头像' : '已关闭：客户端显示一张头像'}
+                      </div>
+                    </div>
+                  </Col>
+                  <Col span={12}>
+                    <div style={{ marginBottom: 16 }}>
+                      <label style={{ display: 'block', marginBottom: 8 }}>
+                        Prompt 扩写（hunyuan_revise）：
+                        <Tooltip title="开启后，混元会自动扩写输入的 prompt 并使用扩写后的 prompt 生成图片。默认关闭。">
+                          <span style={{ marginLeft: 4, color: '#1890ff', cursor: 'help' }}>❓</span>
+                        </Tooltip>
+                      </label>
+                      <Switch
+                        checked={editingAlbum.hunyuan_revise === true}
+                        onChange={(checked) => {
+                          setEditingAlbum({ ...editingAlbum, hunyuan_revise: checked })
+                        }}
+                      />
+                      <div style={{ marginTop: 8, fontSize: 12, color: '#666' }}>
+                        {editingAlbum.hunyuan_revise === true ? '已开启：混元将自动扩写 prompt' : '已关闭：使用原始 prompt 生图'}
+                      </div>
+                    </div>
+                  </Col>
+                </Row>
+
+                <Row gutter={16}>
+                  <Col span={12}>
+                    <div style={{ marginBottom: 16 }}>
+                      <label style={{ display: 'block', marginBottom: 8 }}>
+                        支持自定义提示词（enable_custom_prompt）：
+                      </label>
+                      <Switch
+                        checked={editingAlbum.enable_custom_prompt !== false}
+                        onChange={(checked) => {
+                          setEditingAlbum({ ...editingAlbum, enable_custom_prompt: checked })
+                        }}
+                      />
+                      <div style={{ marginTop: 8, fontSize: 12, color: '#666' }}>
+                        默认开启：App 端会展示输入框，用户可手动输入想说的话
                       </div>
                     </div>
                   </Col>

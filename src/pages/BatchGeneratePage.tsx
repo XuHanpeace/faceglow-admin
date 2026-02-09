@@ -53,6 +53,9 @@ interface FormData {
   // 豆包图生图相关
   exclude_result_image?: boolean
   is_multi_person?: boolean
+  // 混元生图相关
+  hunyuan_resolution?: string
+  hunyuan_revise?: boolean
 }
 
 export default function BatchGeneratePage() {
@@ -137,6 +140,17 @@ export default function BatchGeneratePage() {
         const currentEnable = allValues?.enable_custom_prompt
         if (currentEnable === undefined) {
           form.setFieldsValue({ enable_custom_prompt: true })
+        }
+      }
+      // 混元生图：默认启用自定义提示词、默认分辨率 720:1280（9:16）
+      if (changedValues.task_execution_type === 'async_hunyuan_image') {
+        const currentEnable = allValues?.enable_custom_prompt
+        if (currentEnable === undefined) {
+          form.setFieldsValue({ enable_custom_prompt: true })
+        }
+        const currentResolution = allValues?.hunyuan_resolution
+        if (currentResolution === undefined) {
+          form.setFieldsValue({ hunyuan_resolution: '720:1280' })
         }
       }
     }
@@ -277,6 +291,9 @@ export default function BatchGeneratePage() {
         // 豆包图生图相关字段
         exclude_result_image: formValues.exclude_result_image,
         is_multi_person: formValues.is_multi_person,
+        // 混元生图相关字段
+        hunyuan_resolution: formValues.hunyuan_resolution,
+        hunyuan_revise: formValues.hunyuan_revise,
         // 图片URL：如果已上传则显示真实URL，否则显示待上传
         album_image: uploadedUrls.album_image || (coverImageFile ? '[待上传]' : ''),
         result_image: uploadedUrls.result_image || (coverImageFile ? '[待上传]' : ''),
@@ -497,6 +514,16 @@ export default function BatchGeneratePage() {
         // 豆包图生图相关字段
         exclude_result_image: formValues.exclude_result_image !== undefined ? formValues.exclude_result_image : true,
         is_multi_person: formValues.is_multi_person || false,
+        // 混元生图相关字段（is_multi_person 在下方统一保存，混元相册开启后客户端展示两张原始图头像）
+        hunyuan_resolution: formValues.hunyuan_resolution,
+        hunyuan_revise: formValues.hunyuan_revise,
+        // 任务级参数（客户端透传云函数；混元相册写入 resolution/revise，新增模型由后台配置即可）
+        ...(formValues.task_execution_type === 'async_hunyuan_image' && {
+          task_params: {
+            resolution: formValues.hunyuan_resolution || '720:1280',
+            revise: formValues.hunyuan_revise !== false ? 1 : 0,
+          },
+        }),
       }
 
       await albumService.createAlbum(albumData)
@@ -584,13 +611,12 @@ export default function BatchGeneratePage() {
                           placeholder="选择模型"
                           onChange={(value) => setTaskExecutionType(value)}
                         >
-                          <Option value="sync_portrait">同步执行 - 个人写真换脸（调用 fusion）</Option>
-                          <Option value="sync_group_photo">同步执行 - 多人合拍换脸（调用 fusion）</Option>
                           <Option value="async_image_to_image">异步执行 - 图生图（调用 callBailian）</Option>
                           <Option value="async_image_to_video">异步执行 - 图生视频（调用 callBailian）</Option>
                           <Option value="async_video_effect">异步执行 - 视频特效（调用 callBailian）</Option>
                           <Option value="async_portrait_style_redraw">异步执行 - 人像风格重绘（调用 callBailian）</Option>
                           <Option value="async_doubao_image_to_image">异步执行 - 豆包图生图（调用 callBailian）</Option>
+                          <Option value="async_hunyuan_image">异步执行 - 混元生图（调用 callBailian）</Option>
                         </Select>
                       </Form.Item>
                     </Col>
@@ -1070,6 +1096,106 @@ export default function BatchGeneratePage() {
                                 tooltip="会在 App 端输入框附近展示为小贴士（仅 enable_custom_prompt=true 时展示）"
                               >
                                 <TextArea rows={2} placeholder="例如：可以描述你想要的效果、风格、细节等" />
+                              </Form.Item>
+                            </>
+                          )
+                        }}
+                      </Form.Item>
+                      <Divider />
+                    </>
+                  )}
+
+                  {/* 混元生图配置 */}
+                  {taskExecutionType === 'async_hunyuan_image' && (
+                    <>
+                      <Row gutter={16}>
+                        <Col span={12}>
+                          <Form.Item
+                            name="hunyuan_resolution"
+                            label="生成图分辨率（Resolution）"
+                            tooltip="混元生图支持的分辨率选项，默认 720:1280（9:16 竖图）"
+                            initialValue="720:1280"
+                          >
+                            <Select placeholder="选择分辨率">
+                              <Option value="720:1280">720:1280（9:16 竖图）</Option>
+                              <Option value="1280:720">1280:720（16:9 横图）</Option>
+                              <Option value="768:1024">768:1024（3:4 竖图）</Option>
+                              <Option value="1024:768">1024:768（4:3 横图）</Option>
+                              <Option value="768:1280">768:1280（3:5 竖图）</Option>
+                              <Option value="1280:768">1280:768（5:3 横图）</Option>
+                              <Option value="768:768">768:768（1:1 方图）</Option>
+                              <Option value="1024:1024">1024:1024（1:1 方图）</Option>
+                            </Select>
+                          </Form.Item>
+                        </Col>
+                        <Col span={12}>
+                          <Form.Item
+                            name="hunyuan_revise"
+                            label="Prompt 扩写（Revise）"
+                            valuePropName="checked"
+                            initialValue={true}
+                            tooltip="开启后，混元会自动扩写输入的 prompt 并使用扩写后的 prompt 生成图片。默认启用。"
+                          >
+                            <Switch />
+                          </Form.Item>
+                        </Col>
+                      </Row>
+
+                      <Form.Item
+                        name="is_multi_person"
+                        label={
+                          <span>
+                            多人合拍模式（is_multi_person）：
+                            <Tooltip title="开启后，需上传两张原始图；客户端相册卡片将展示两个头像占位（如情侣拜年样式）。默认关闭即单人模式，仅展示一张头像。">
+                              <span style={{ marginLeft: 4, color: '#1890ff', cursor: 'help' }}>❓</span>
+                            </Tooltip>
+                          </span>
+                        }
+                        valuePropName="checked"
+                        initialValue={false}
+                      >
+                        <Switch />
+                      </Form.Item>
+                      <div style={{ marginTop: -16, marginBottom: 16, fontSize: 12, color: '#666' }}>
+                        开启后请在上方「原始图（src_images）」中上传两张图，客户端将显示两个头像。
+                      </div>
+
+                      <Form.Item
+                        name="enable_custom_prompt"
+                        label="支持自定义提示词（enable_custom_prompt）"
+                        valuePropName="checked"
+                        initialValue={true}
+                        tooltip="默认为开启：App 端 BeforeCreation 会展示输入框，用户可手动输入想说的话（custom_prompt）"
+                      >
+                        <Switch />
+                      </Form.Item>
+
+                      <Form.Item
+                        noStyle
+                        shouldUpdate={(prevValues: Record<string, unknown>, currentValues: Record<string, unknown>) =>
+                          prevValues?.enable_custom_prompt !== currentValues?.enable_custom_prompt
+                        }
+                      >
+                        {({ getFieldValue }) => {
+                          const enabled = !!getFieldValue('enable_custom_prompt')
+                          if (!enabled) return null
+
+                          return (
+                            <>
+                              <Form.Item
+                                name="custom_prompt"
+                                label="默认自定义提示词（custom_prompt，可选）"
+                                tooltip="可为空；若填写，App 输入框会默认填入该值，用户可修改"
+                              >
+                                <TextArea rows={2} placeholder="例如：赛博朋克风格、水彩画风格..." />
+                              </Form.Item>
+
+                              <Form.Item
+                                name="custom_prompt_tips"
+                                label="小贴士（custom_prompt_tips，可选）"
+                                tooltip="会在 App 端输入框附近展示为小贴士（仅 enable_custom_prompt=true 时展示）"
+                              >
+                                <TextArea rows={2} placeholder="例如：可以描述你想要的画面风格、场景细节等" />
                               </Form.Item>
                             </>
                           )
